@@ -24,13 +24,15 @@ public class User extends AbstractEntity implements UserDetails {
 
     @Indexed(unique = true)
     private String username;
-
+    private String password;
     private String email;
 
-    private String password;
+    private boolean active = true;
+
+    private String firstname;
+    private String lastname;
 
     private Set<String> roleIds = new HashSet<>();
-
     private Set<String> roleNames = new HashSet<>();
     private Set<String> capabilityNames = new HashSet<>();
 
@@ -83,6 +85,6 @@ public class User extends AbstractEntity implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return this.active;
     }
 }
