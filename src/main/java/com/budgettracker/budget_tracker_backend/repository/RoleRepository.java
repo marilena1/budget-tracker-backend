@@ -5,6 +5,10 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.util.Optional;
 
+/**
+ * Repository for managing {@link Role} entities in MongoDB.
+ * Roles group capabilities and are assigned to users for access control.
+ */
 public interface RoleRepository extends MongoRepository<Role, String> {
 
     boolean existsByName(String name);
