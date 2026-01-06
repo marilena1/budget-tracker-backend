@@ -6,10 +6,10 @@ import lombok.Setter;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -33,8 +33,6 @@ public class User extends AbstractEntity implements UserDetails {
     private String lastname;
 
     private Set<String> roleIds = new HashSet<>();
-    private Set<String> roleNames = new HashSet<>();
-    private Set<String> capabilityNames = new HashSet<>();
 
     /**
      * Adds a role to this user.
@@ -55,17 +53,9 @@ public class User extends AbstractEntity implements UserDetails {
     @Override
     @NonNull
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        Set<GrantedAuthority> grantedAuthorities = new HashSet<>();
-
-        roleNames.forEach(roleName ->
-                grantedAuthorities.add(new SimpleGrantedAuthority("ROLE_" + roleName))
-        );
-
-        capabilityNames.forEach(capability ->
-                grantedAuthorities.add(new SimpleGrantedAuthority(capability))
-        );
-
-        return grantedAuthorities;
+        // Return empty - authorities will be populated by UserDetailsService
+        // The UserDetailsService will create a NEW UserDetails object with authorities
+        return Collections.emptySet();
     }
 
     @Override
