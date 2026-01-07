@@ -1,8 +1,7 @@
 package com.budgettracker.budget_tracker_backend.model.auth;
 
 import com.budgettracker.budget_tracker_backend.model.AbstractEntity;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -15,6 +14,9 @@ import java.util.Set;
  */
 @Getter
 @Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Document(collection = "roles")
 public class Role extends AbstractEntity {
 
@@ -23,6 +25,7 @@ public class Role extends AbstractEntity {
 
     private String description;
 
+    @Builder.Default
     private Set<String> capabilityNames = new HashSet<>();
 
 
