@@ -12,7 +12,6 @@ import java.time.LocalDate;
 /**
  * Service interface for managing financial transactions.
  * Defines the business operations for transaction CRUD and filtering.
- * All methods require explicit userId parameter for user-scoped data access.
  */
 public interface ITransactionService {
 
@@ -21,12 +20,12 @@ public interface ITransactionService {
      * Validates business rules and ensures the referenced category exists.
      *
      * @param transactionInsertDTO the transaction data to create
-     * @param userId the ID of the user creating the transaction
+     * @param username the username of the user creating the transaction
      * @return TransactionReadOnlyDTO containing the created transaction data
      * @throws AppObjectInvalidArgumentException if transaction data violates business rules
-     * @throws AppObjectNotFoundException if the referenced category does not exist
+     * @throws AppObjectNotFoundException if the referenced category or user does not exist
      */
-    TransactionReadOnlyDTO createTransaction(TransactionInsertDTO transactionInsertDTO, String userId)
+    TransactionReadOnlyDTO createTransaction(TransactionInsertDTO transactionInsertDTO, String username)
         throws AppObjectInvalidArgumentException, AppObjectNotFoundException;
 
     /**
@@ -35,26 +34,26 @@ public interface ITransactionService {
      *
      * @param transactionId the unique identifier of the transaction to update
      * @param transactionUpdateDTO the new transaction data to apply (uses same structure as creation)
-     * @param userId the ID of the user attempting the update (for ownership verification)
+     * @param username the username of the user attempting the update (for ownership verification)
      * @return TransactionReadOnlyDTO containing the updated transaction data
      * @throws AppObjectNotFoundException if the transaction with given ID does not exist
      * @throws AppObjectNotAuthorizedException if the user does not own the transaction
      * @throws AppObjectInvalidArgumentException if the update data violates business rules
      *         (e.g., invalid amount, future date, etc.)
      */
-    TransactionReadOnlyDTO updateTransaction(String transactionId, TransactionInsertDTO transactionUpdateDTO, String userId)
+    TransactionReadOnlyDTO updateTransaction(String transactionId, TransactionInsertDTO transactionUpdateDTO, String username)
             throws AppObjectNotFoundException, AppObjectNotAuthorizedException, AppObjectInvalidArgumentException;
 
     /**
      * Deletes a specific transaction belonging to a user.
      * Validates that the transaction exists and that the user owns it.
      *
-     * @param userId the ID of the user attempting the deletion
+     * @param username the username of the user attempting the deletion
      * @param transactionId the ID of the transaction to delete
      * @throws AppObjectNotFoundException if the transaction does not exist
      * @throws AppObjectNotAuthorizedException if the user does not own the transaction
      */
-    void deleteTransaction(String userId, String transactionId)
+    void deleteTransaction(String username, String transactionId)
             throws AppObjectNotFoundException, AppObjectNotAuthorizedException;
 
     /**
@@ -62,43 +61,45 @@ public interface ITransactionService {
      * Results are ordered by date descending (newest first) and then by creation time.
      * Includes validation for pagination parameters to ensure valid database queries.
      *
-     * @param userId the ID of the user whose transactions to retrieve
+     * @param username the username of the user whose transactions to retrieve
      * @param page the page number (0-based)
      * @param size the number of transactions per page, must be between 1 and 100
      * @return Page of TransactionReadOnlyDTOs for the specified user
+     * @throws AppObjectNotFoundException if the user does not exist
      * @throws AppObjectInvalidArgumentException if page is negative or size is not between 1 and 100
      */
-    Page<TransactionReadOnlyDTO> getPaginatedTransactionsByUser(String userId, int page, int size)
-            throws AppObjectInvalidArgumentException;
+    Page<TransactionReadOnlyDTO> getPaginatedTransactionsByUser(String username, int page, int size)
+            throws AppObjectNotFoundException, AppObjectInvalidArgumentException;
 
     /**
      * Retrieves transactions for a user within a specific date range.
      * Useful for generating monthly statements or period-based reports.
      *
-     * @param userId the ID of the user whose transactions to retrieve
+     * @param username the username of the user whose transactions to retrieve
      * @param startDate the start date of the range (inclusive)
      * @param endDate the end date of the range (inclusive)
      * @param page the page number (0-based)
      * @param size the number of transactions per page, must be between 1 and 100
      * @return Page of TransactionReadOnlyDTOs filtered by date range
+     * @throws AppObjectNotFoundException if the user does not exist
      * @throws AppObjectInvalidArgumentException if pagination parameters are invalid,
      *         dates are null, startDate is after endDate, or date range exceeds reasonable limits
      */
-    Page<TransactionReadOnlyDTO> getTransactionByUserAndDateRange(String userId, LocalDate startDate, LocalDate endDate, int page, int size)
-            throws AppObjectInvalidArgumentException ;
+    Page<TransactionReadOnlyDTO> getTransactionByUserAndDateRange(String username, LocalDate startDate, LocalDate endDate, int page, int size)
+            throws AppObjectNotFoundException, AppObjectInvalidArgumentException ;
 
     /**
      * Retrieves transactions for a user filtered by a specific category.
      * Helpful for analyzing spending in particular categories (e.g., "Food", "Entertainment").
      *
-     * @param userId the ID of the user whose transactions to retrieve
+     * @param username the username of the user whose transactions to retrieve
      * @param categoryId the ID of the category to filter by
      * @param page the page number (0-based)
      * @param size the number of transactions per page, must be between 1 and 100
      * @return Page of TransactionReadOnlyDTOs filtered by category
-     * @throws AppObjectInvalidArgumentException if pagination parameters are invalid
      * @throws AppObjectNotFoundException if the specified category does not exist
+     * @throws AppObjectInvalidArgumentException if pagination parameters are invalid
      */
-    Page<TransactionReadOnlyDTO> getTransactionByUserAndCategory(String userId, String categoryId, int page, int size)
-            throws AppObjectInvalidArgumentException, AppObjectNotFoundException;
+    Page<TransactionReadOnlyDTO> getTransactionByUserAndCategory(String username, String categoryId, int page, int size)
+            throws AppObjectNotFoundException, AppObjectInvalidArgumentException;
 }

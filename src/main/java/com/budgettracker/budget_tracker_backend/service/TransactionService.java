@@ -41,13 +41,13 @@ public class TransactionService implements ITransactionService {
      * related data for query performance.
      *
      * @param transactionInsertDTO the transaction data provided by the user
-     * @param userId the ID of the user creating the transaction
+     * @param username the username of the user creating the transaction
      * @return TransactionReadOnlyDTO containing the created transaction with system-generated fields
      * @throws AppObjectInvalidArgumentException if transaction data violates business rules
      * @throws AppObjectNotFoundException if referenced category or user does not exist
      */
     @Override
-    public TransactionReadOnlyDTO createTransaction(TransactionInsertDTO transactionInsertDTO, String userId)
+    public TransactionReadOnlyDTO createTransaction(TransactionInsertDTO transactionInsertDTO, String username)
             throws AppObjectInvalidArgumentException, AppObjectNotFoundException {
 
         if (transactionInsertDTO.amount() == null || transactionInsertDTO.amount().compareTo(BigDecimal.ZERO) == 0) {
@@ -57,8 +57,9 @@ public class TransactionService implements ITransactionService {
         Category category = categoryRepository.findById(transactionInsertDTO.categoryId())
                 .orElseThrow(() -> new AppObjectNotFoundException("Category", transactionInsertDTO.categoryId()));
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppObjectNotFoundException("User", userId));
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new AppObjectNotFoundException("User", username));
+        String userId = user.getId();
 
         Transaction transaction = new Transaction();
         transaction.setUserId(userId);
@@ -94,19 +95,23 @@ public class TransactionService implements ITransactionService {
      *
      * @param transactionId the unique identifier of the transaction to update
      * @param transactionUpdateDTO the new transaction data
-     * @param userId the ID of the user attempting the update
+     * @param username the username of the user attempting the update
      * @return TransactionReadOnlyDTO containing the updated transaction
-     * @throws AppObjectNotFoundException if transaction or referenced category does not exist
+     * @throws AppObjectNotFoundException if transaction, referenced category, or user does not exist
      * @throws AppObjectNotAuthorizedException if user does not own the transaction
      * @throws AppObjectInvalidArgumentException if update data violates business rules
      */
     @Override
-    public TransactionReadOnlyDTO updateTransaction(String transactionId, TransactionInsertDTO transactionUpdateDTO, String userId)
+    public TransactionReadOnlyDTO updateTransaction(String transactionId, TransactionInsertDTO transactionUpdateDTO, String username)
             throws AppObjectNotFoundException, AppObjectNotAuthorizedException, AppObjectInvalidArgumentException {
 
         if (transactionUpdateDTO.amount() == null || transactionUpdateDTO.amount().compareTo(BigDecimal.ZERO) == 0) {
             throw new AppObjectInvalidArgumentException("amount", "cannot be zero");
         }
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new AppObjectNotFoundException("User", username));
+        String userId = user.getId();
 
         Transaction existingTransaction = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new AppObjectNotFoundException("Transaction", transactionId));
@@ -157,14 +162,18 @@ public class TransactionService implements ITransactionService {
      * Deletes a specific transaction belonging to a user.
      * Validates that the transaction exists and that the user owns it.
      *
-     * @param userId the ID of the user attempting the deletion
+     * @param username the username of the user attempting the deletion
      * @param transactionId the ID of the transaction to delete
-     * @throws AppObjectNotFoundException if the transaction does not exist
+     * @throws AppObjectNotFoundException if the transaction or user does not exist
      * @throws AppObjectNotAuthorizedException if the user does not own the transaction
      */
     @Override
-    public void deleteTransaction(String userId, String transactionId)
+    public void deleteTransaction(String username, String transactionId)
             throws AppObjectNotFoundException, AppObjectNotAuthorizedException {
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new AppObjectNotFoundException("User", username));
+        String userId = user.getId();
 
         Transaction transaction = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new AppObjectNotFoundException("Transaction", transactionId));
@@ -183,21 +192,27 @@ public class TransactionService implements ITransactionService {
          * Results are ordered by date descending (newest first) and then by creation time.
          * Validates pagination parameters before querying the database.
          *
-         * @param userId the ID of the user whose transactions to retrieve
+         * @param username the username of the user whose transactions to retrieve
          * @param page the page number (0-based)
          * @param size the number of transactions per page (maximum 100)
          * @return Page of TransactionReadOnlyDTOs for the specified user
+         * @throws AppObjectNotFoundException if the user does not exist
          * @throws AppObjectInvalidArgumentException if page is negative or size is not between 1 and 100
          */
     @Override
-    public Page<TransactionReadOnlyDTO> getPaginatedTransactionsByUser(String userId, int page, int size)
-            throws AppObjectInvalidArgumentException {
+    public Page<TransactionReadOnlyDTO> getPaginatedTransactionsByUser(String username, int page, int size)
+            throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
         if (page < 0) {
             throw new AppObjectInvalidArgumentException("page", "must be zero or positive");
         }
         if (size <= 0 || size > 100) {
             throw new AppObjectInvalidArgumentException("size", "must be between 1 and 100");
         }
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new AppObjectNotFoundException("User", username));
+        String userId = user.getId();
+
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("date").descending()
                 .and(Sort.by("createdAt").descending()));
@@ -224,18 +239,19 @@ public class TransactionService implements ITransactionService {
      * Useful for generating monthly statements or period-based reports.
      * Validates pagination parameters and date range validity before querying.
      *
-     * @param userId the ID of the user whose transactions to retrieve
+     * @param username the username of the user whose transactions to retrieve
      * @param startDate the start date of the range (inclusive), cannot be null
      * @param endDate the end date of the range (inclusive), cannot be null
      * @param page the page number (0-based)
      * @param size the number of transactions per page, must be between 1 and 100
      * @return Page of TransactionReadOnlyDTOs filtered by date range
+     * @throws AppObjectNotFoundException if the user does not exist
      * @throws AppObjectInvalidArgumentException if pagination parameters are invalid,
      *         dates are null, startDate is after endDate, or date range exceeds reasonable limits
      */
     @Override
-    public Page<TransactionReadOnlyDTO> getTransactionByUserAndDateRange(String userId, LocalDate startDate, LocalDate endDate, int page, int size)
-            throws AppObjectInvalidArgumentException {
+    public Page<TransactionReadOnlyDTO> getTransactionByUserAndDateRange(String username, LocalDate startDate, LocalDate endDate, int page, int size)
+            throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
 
         if (page < 0) {
             throw new AppObjectInvalidArgumentException("page", "must be zero or positive");
@@ -252,6 +268,10 @@ public class TransactionService implements ITransactionService {
         if (startDate.isAfter(endDate)) {
             throw new AppObjectInvalidArgumentException("date range", "startDate must be before endDate");
         }
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new AppObjectNotFoundException("User", username));
+        String userId = user.getId();
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("date").descending()
                 .and(Sort.by("createdAt").descending()));
@@ -279,17 +299,17 @@ public class TransactionService implements ITransactionService {
      * Helpful for analyzing spending in particular categories.
      * Validates pagination parameters and verifies category existence.
      *
-     * @param userId the ID of the user whose transactions to retrieve
+     * @param username the username of the user whose transactions to retrieve
      * @param categoryId the ID of the category to filter by, must reference an existing category
      * @param page the page number (0-based)
      * @param size the number of transactions per page, must be between 1 and 100
      * @return Page of TransactionReadOnlyDTOs filtered by category
-     * @throws AppObjectInvalidArgumentException if pagination parameters are invalid
      * @throws AppObjectNotFoundException if the specified category does not exist
+     * @throws AppObjectInvalidArgumentException if pagination parameters are invalid
      */
     @Override
-    public Page<TransactionReadOnlyDTO> getTransactionByUserAndCategory(String userId, String categoryId, int page, int size)
-            throws AppObjectInvalidArgumentException, AppObjectNotFoundException {
+    public Page<TransactionReadOnlyDTO> getTransactionByUserAndCategory(String username, String categoryId, int page, int size)
+            throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
 
         if (page < 0) {
             throw new AppObjectInvalidArgumentException("page", "must be zero or positive");
@@ -297,6 +317,10 @@ public class TransactionService implements ITransactionService {
         if (size <= 0 || size > 100) {
             throw new AppObjectInvalidArgumentException("size", "must be between 1 and 100");
         }
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new AppObjectNotFoundException("User", username));
+        String userId = user.getId();
 
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new AppObjectNotFoundException("Category", categoryId));
