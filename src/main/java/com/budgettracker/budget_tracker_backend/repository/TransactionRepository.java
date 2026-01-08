@@ -22,4 +22,6 @@ public interface TransactionRepository extends MongoRepository<Transaction, Stri
     Page<Transaction> findByUserId(String userId, Pageable pageable);
     Page<Transaction> findByUserIdAndCategoryId(String userId, String categoryId, Pageable pageable);
     Page<Transaction> findByUserIdAndDateBetween(String userId, LocalDate start, LocalDate end, Pageable pageable);
+
+    boolean existsByCategoryId(String categoryId);
 }
