@@ -1,8 +1,5 @@
 package com.budgettracker.budget_tracker_backend.model;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
@@ -25,30 +22,18 @@ import java.util.Set;
 @Document(collection = "users")
 public class User extends AbstractEntity implements UserDetails {
 
-    @NotBlank(message = "Username is required")
-    @Size(min = 3, max = 30, message = "Username must be 3-30 characters")
     @Indexed(unique = true)
     private String username;
 
-    @NotBlank(message = "Password is required")
-    @Size(min = 6, message = "Password must be at least 6 characters")
-    @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d).{6,}$",
-            message = "Password must contain at least 1 letter and 1 number")
     private String password;
 
-    @NotBlank(message = "Email is required")
-    @Pattern(regexp = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$",
-            message = "Please provide a valid email address (e.g., user@example.com)")
+    @Indexed(unique = true)
     private String email;
 
     private boolean active = true;
 
-    @NotBlank(message = "First name is required")
-    @Size(max = 50, message = "First name cannot exceed 50 characters")
     private String firstname;
 
-    @NotBlank(message = "Last name is required")
-    @Size(max = 50, message = "Last name cannot exceed 50 characters")
     private String lastname;
 
     private Set<String> roleIds = new HashSet<>();
