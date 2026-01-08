@@ -12,6 +12,7 @@ import com.budgettracker.budget_tracker_backend.repository.CategoryRepository;
 import com.budgettracker.budget_tracker_backend.repository.TransactionRepository;
 import com.budgettracker.budget_tracker_backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -29,6 +30,7 @@ import java.time.LocalDate;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TransactionService implements ITransactionService {
 
     private final TransactionRepository transactionRepository;
@@ -50,15 +52,27 @@ public class TransactionService implements ITransactionService {
     public TransactionReadOnlyDTO createTransaction(TransactionInsertDTO transactionInsertDTO, String username)
             throws AppObjectInvalidArgumentException, AppObjectNotFoundException {
 
+        log.info("Creating transaction for user '{}' with amount {} in category {}",
+                username, transactionInsertDTO.amount(), transactionInsertDTO.categoryId());
+
         if (transactionInsertDTO.amount() == null || transactionInsertDTO.amount().compareTo(BigDecimal.ZERO) == 0) {
+            log.warn("Transaction creation failed: amount is zero or null for user '{}'", username);
             throw new AppObjectInvalidArgumentException("amount", "cannot be zero");
         }
 
         Category category = categoryRepository.findById(transactionInsertDTO.categoryId())
-                .orElseThrow(() -> new AppObjectNotFoundException("Category", transactionInsertDTO.categoryId()));
+                .orElseThrow(() -> {
+                    log.warn("Category {} not found for user '{}'",
+                            transactionInsertDTO.categoryId(), username);
+                    return new AppObjectNotFoundException("Category", transactionInsertDTO.categoryId());
+                });
 
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new AppObjectNotFoundException("User", username));
+                .orElseThrow(() -> {
+                    log.warn("User '{}' not found during transaction creation", username);
+                    return new AppObjectNotFoundException("User", username);
+                });
+
         String userId = user.getId();
 
         Transaction transaction = new Transaction();
@@ -71,7 +85,12 @@ public class TransactionService implements ITransactionService {
         transaction.setDescription(transactionInsertDTO.description());
         transaction.setDate(transactionInsertDTO.date());
 
+        log.debug("Saving transaction for user '{}' with ID: {}", username, user.getId());
+
         Transaction saved = transactionRepository.save(transaction);
+
+        log.info("Transaction created successfully. ID: {}, User: {}, Amount: {}, Category: {}",
+                saved.getId(), username, saved.getAmount(), saved.getCategoryName());
 
         return TransactionReadOnlyDTO.builder()
                 .id(saved.getId())
@@ -105,18 +124,32 @@ public class TransactionService implements ITransactionService {
     public TransactionReadOnlyDTO updateTransaction(String transactionId, TransactionInsertDTO transactionUpdateDTO, String username)
             throws AppObjectNotFoundException, AppObjectNotAuthorizedException, AppObjectInvalidArgumentException {
 
+        log.info("Updating transaction {} for user '{}'", transactionId, username);
+
         if (transactionUpdateDTO.amount() == null || transactionUpdateDTO.amount().compareTo(BigDecimal.ZERO) == 0) {
+            log.warn("Transaction update failed: amount is zero or null for transaction {} by user '{}'",
+                    transactionId, username);
             throw new AppObjectInvalidArgumentException("amount", "cannot be zero");
         }
 
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new AppObjectNotFoundException("User", username));
+                .orElseThrow(() -> {
+                    log.warn("User '{}' not found during transaction update for transaction {}",
+                            username, transactionId);
+                    return new AppObjectNotFoundException("User", username);
+                });
         String userId = user.getId();
 
         Transaction existingTransaction = transactionRepository.findById(transactionId)
-                .orElseThrow(() -> new AppObjectNotFoundException("Transaction", transactionId));
+                .orElseThrow(() -> {
+                    log.warn("Transaction {} not found for update by user '{}'",
+                            transactionId, username);
+                    return new AppObjectNotFoundException("Transaction", transactionId);
+                });
 
         if (!existingTransaction.getUserId().equals(userId)) {
+            log.warn("User '{}' attempted to update transaction {} belonging to user '{}'",
+                    username, transactionId, existingTransaction.getUserUsername());
             throw new AppObjectNotAuthorizedException(
                     "Transaction " + transactionId,
                     "You must be the owner of a transaction to update it"
@@ -127,11 +160,21 @@ public class TransactionService implements ITransactionService {
         boolean categoryChanged = !existingTransaction.getCategoryId().equals(transactionUpdateDTO.categoryId());
 
         if (categoryChanged) {
+            log.debug("Category changed for transaction {} from {} to {}",
+                    transactionId, existingTransaction.getCategoryId(), transactionUpdateDTO.categoryId());
             category = categoryRepository.findById(transactionUpdateDTO.categoryId())
-                    .orElseThrow(() -> new AppObjectNotFoundException("Category", transactionUpdateDTO.categoryId()));
+                    .orElseThrow(() -> {
+                        log.warn("Category {} not found during update of transaction {} by user '{}'",
+                                transactionUpdateDTO.categoryId(), transactionId, username);
+                        return new AppObjectNotFoundException("Category", transactionUpdateDTO.categoryId());
+                    });
         } else {
             category = categoryRepository.findById(existingTransaction.getCategoryId())
-                    .orElseThrow(() -> new AppObjectNotFoundException("Category", existingTransaction.getCategoryId()));
+                    .orElseThrow(() -> {
+                        log.warn("Existing category {} not found for transaction {}",
+                                existingTransaction.getCategoryId(), transactionId);
+                        return new AppObjectNotFoundException("Category", existingTransaction.getCategoryId());
+                    });
         }
 
         existingTransaction.setCategoryId(transactionUpdateDTO.categoryId());
@@ -141,7 +184,11 @@ public class TransactionService implements ITransactionService {
         existingTransaction.setDescription(transactionUpdateDTO.description());
         existingTransaction.setDate(transactionUpdateDTO.date());
 
+        log.debug("Saving updated transaction {} for user '{}'", transactionId, username);
+
         Transaction updatedTransaction = transactionRepository.save(existingTransaction);
+
+        log.info("Transaction {} updated successfully by user '{}'", transactionId, username);
 
         return TransactionReadOnlyDTO.builder()
                 .id(updatedTransaction.getId())
@@ -171,20 +218,33 @@ public class TransactionService implements ITransactionService {
     public void deleteTransaction(String username, String transactionId)
             throws AppObjectNotFoundException, AppObjectNotAuthorizedException {
 
+        log.info("Deleting transaction {} for user '{}'", transactionId, username);
+
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new AppObjectNotFoundException("User", username));
+                .orElseThrow(() -> {
+                    log.warn("User '{}' not found during deletion of transaction {}",
+                            username, transactionId);
+                    return new AppObjectNotFoundException("User", username);
+                });
         String userId = user.getId();
 
         Transaction transaction = transactionRepository.findById(transactionId)
-                .orElseThrow(() -> new AppObjectNotFoundException("Transaction", transactionId));
+                .orElseThrow(() -> {
+                    log.warn("Transaction {} not found for deletion by user '{}'",
+                            transactionId, username);
+                    return new AppObjectNotFoundException("Transaction", transactionId);
+                });
 
         if (!transaction.getUserId().equals(userId)) {
+            log.warn("User '{}' attempted to delete transaction {} belonging to user '{}'",
+                    username, transactionId, transaction.getUserUsername());
             throw new AppObjectNotAuthorizedException(
                     "Transaction " + transactionId,
                     "You must be the owner of a transaction to delete it");
         }
 
         transactionRepository.delete(transaction);
+        log.info("Transaction {} deleted successfully by user '{}'", transactionId, username);
     }
 
         /**
@@ -202,15 +262,24 @@ public class TransactionService implements ITransactionService {
     @Override
     public Page<TransactionReadOnlyDTO> getPaginatedTransactionsByUser(String username, int page, int size)
             throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
+
+        log.debug("Getting paginated transactions for user '{}', page={}, size={}",
+                username, page, size);
+
         if (page < 0) {
+            log.warn("Invalid page number {} for user '{}'", page, username);
             throw new AppObjectInvalidArgumentException("page", "must be zero or positive");
         }
         if (size <= 0 || size > 100) {
+            log.warn("Invalid page size {} for user '{}'", size, username);
             throw new AppObjectInvalidArgumentException("size", "must be between 1 and 100");
         }
 
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new AppObjectNotFoundException("User", username));
+                .orElseThrow(() -> {
+                    log.warn("User '{}' not found when fetching paginated transactions", username);
+                    return new AppObjectNotFoundException("User", username);
+                });
         String userId = user.getId();
 
 
@@ -218,6 +287,9 @@ public class TransactionService implements ITransactionService {
                 .and(Sort.by("createdAt").descending()));
 
         Page<Transaction> transactionsPage = transactionRepository.findByUserId(userId, pageable);
+
+        log.debug("Returning {} transactions for user '{}', page {} of {}",
+                transactionsPage.getNumberOfElements(), username, page, transactionsPage.getTotalPages());
 
         return transactionsPage.map(transaction -> TransactionReadOnlyDTO.builder()
                 .id(transaction.getId())
@@ -253,24 +325,36 @@ public class TransactionService implements ITransactionService {
     public Page<TransactionReadOnlyDTO> getTransactionByUserAndDateRange(String username, LocalDate startDate, LocalDate endDate, int page, int size)
             throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
 
+        log.debug("Getting transactions for user '{}' between {} and {}, page={}, size={}",
+                username, startDate, endDate, page, size);
+
         if (page < 0) {
+            log.warn("Invalid page number {} for user '{}' date range query", page, username);
             throw new AppObjectInvalidArgumentException("page", "must be zero or positive");
         }
         if (size <= 0 || size > 100) {
+            log.warn("Invalid page size {} for user '{}' date range query", size, username);
             throw new AppObjectInvalidArgumentException("size", "must be between 1 and 100");
         }
         if (startDate == null) {
+            log.warn("Null startDate for user '{}' date range query", username);
             throw new AppObjectInvalidArgumentException("startDate", "cannot be null");
         }
         if (endDate == null) {
+            log.warn("Null endDate for user '{}' date range query", username);
             throw new AppObjectInvalidArgumentException("endDate", "cannot be null");
         }
         if (startDate.isAfter(endDate)) {
+            log.warn("Invalid date range for user '{}': startDate {} is after endDate {}",
+                    username, startDate, endDate);
             throw new AppObjectInvalidArgumentException("date range", "startDate must be before endDate");
         }
 
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new AppObjectNotFoundException("User", username));
+                .orElseThrow(() -> {
+                    log.warn("User '{}' not found when fetching date range transactions", username);
+                    return new AppObjectNotFoundException("User", username);
+                });
         String userId = user.getId();
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("date").descending()
@@ -278,6 +362,9 @@ public class TransactionService implements ITransactionService {
 
         Page<Transaction> transactionsPage = transactionRepository.findByUserIdAndDateBetween(
                 userId, startDate, endDate, pageable);
+
+        log.debug("Returning {} transactions for user '{}' between {} and {}",
+                transactionsPage.getNumberOfElements(), username, startDate, endDate);
 
         return transactionsPage.map(transaction -> TransactionReadOnlyDTO.builder()
                 .id(transaction.getId())
@@ -311,25 +398,40 @@ public class TransactionService implements ITransactionService {
     public Page<TransactionReadOnlyDTO> getTransactionByUserAndCategory(String username, String categoryId, int page, int size)
             throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
 
+        log.debug("Getting transactions for user '{}' in category {}, page={}, size={}",
+                username, categoryId, page, size);
+
         if (page < 0) {
+            log.warn("Invalid page number {} for user '{}' category query", page, username);
             throw new AppObjectInvalidArgumentException("page", "must be zero or positive");
         }
         if (size <= 0 || size > 100) {
+            log.warn("Invalid page size {} for user '{}' category query", size, username);
             throw new AppObjectInvalidArgumentException("size", "must be between 1 and 100");
         }
 
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new AppObjectNotFoundException("User", username));
+                .orElseThrow(() -> {
+                    log.warn("User '{}' not found when fetching category transactions", username);
+                    return new AppObjectNotFoundException("User", username);
+                });
         String userId = user.getId();
 
         Category category = categoryRepository.findById(categoryId)
-                .orElseThrow(() -> new AppObjectNotFoundException("Category", categoryId));
+                .orElseThrow(() -> {
+                    log.warn("Category {} not found for user '{}' category transactions",
+                            categoryId, username);
+                    return new AppObjectNotFoundException("Category", categoryId);
+                });
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("date").descending()
                 .and(Sort.by("createdAt").descending()));
 
         Page<Transaction> transactionsPage = transactionRepository.findByUserIdAndCategoryId(
                 userId, categoryId, pageable);
+
+        log.debug("Returning {} transactions for user '{}' in category {}",
+                transactionsPage.getNumberOfElements(), username, category.getName());
 
         return transactionsPage.map(transaction -> TransactionReadOnlyDTO.builder()
                 .id(transaction.getId())
