@@ -68,7 +68,7 @@ public interface ITransactionService {
      * @throws AppObjectNotFoundException if the user does not exist
      * @throws AppObjectInvalidArgumentException if page is negative or size is not between 1 and 100
      */
-    Page<TransactionReadOnlyDTO> getPaginatedTransactionsByUser(String username, int page, int size)
+    Page<TransactionReadOnlyDTO> getTransactionsByUser(String username, int page, int size)
             throws AppObjectNotFoundException, AppObjectInvalidArgumentException;
 
     /**

@@ -260,7 +260,7 @@ public class TransactionService implements ITransactionService {
          * @throws AppObjectInvalidArgumentException if page is negative or size is not between 1 and 100
          */
     @Override
-    public Page<TransactionReadOnlyDTO> getPaginatedTransactionsByUser(String username, int page, int size)
+    public Page<TransactionReadOnlyDTO> getTransactionsByUser(String username, int page, int size)
             throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
 
         log.debug("Getting paginated transactions for user '{}', page={}, size={}",
