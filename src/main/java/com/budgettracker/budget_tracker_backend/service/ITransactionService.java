@@ -85,7 +85,7 @@ public interface ITransactionService {
      * @throws AppObjectInvalidArgumentException if pagination parameters are invalid,
      *         dates are null, startDate is after endDate, or date range exceeds reasonable limits
      */
-    Page<TransactionReadOnlyDTO> getTransactionByUserAndDateRange(String username, LocalDate startDate, LocalDate endDate, int page, int size)
+    Page<TransactionReadOnlyDTO> getTransactionsByUserAndDateRange(String username, LocalDate startDate, LocalDate endDate, int page, int size)
             throws AppObjectNotFoundException, AppObjectInvalidArgumentException ;
 
     /**
@@ -100,6 +100,6 @@ public interface ITransactionService {
      * @throws AppObjectNotFoundException if the specified category does not exist
      * @throws AppObjectInvalidArgumentException if pagination parameters are invalid
      */
-    Page<TransactionReadOnlyDTO> getTransactionByUserAndCategory(String username, String categoryId, int page, int size)
+    Page<TransactionReadOnlyDTO> getTransactionsByUserAndCategory(String username, String categoryId, int page, int size)
             throws AppObjectNotFoundException, AppObjectInvalidArgumentException;
 }

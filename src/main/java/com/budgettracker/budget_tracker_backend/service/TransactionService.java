@@ -322,7 +322,7 @@ public class TransactionService implements ITransactionService {
      *         dates are null, startDate is after endDate, or date range exceeds reasonable limits
      */
     @Override
-    public Page<TransactionReadOnlyDTO> getTransactionByUserAndDateRange(String username, LocalDate startDate, LocalDate endDate, int page, int size)
+    public Page<TransactionReadOnlyDTO> getTransactionsByUserAndDateRange(String username, LocalDate startDate, LocalDate endDate, int page, int size)
             throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
 
         log.debug("Getting transactions for user '{}' between {} and {}, page={}, size={}",
@@ -395,7 +395,7 @@ public class TransactionService implements ITransactionService {
      * @throws AppObjectInvalidArgumentException if pagination parameters are invalid
      */
     @Override
-    public Page<TransactionReadOnlyDTO> getTransactionByUserAndCategory(String username, String categoryId, int page, int size)
+    public Page<TransactionReadOnlyDTO> getTransactionsByUserAndCategory(String username, String categoryId, int page, int size)
             throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
 
         log.debug("Getting transactions for user '{}' in category {}, page={}, size={}",
