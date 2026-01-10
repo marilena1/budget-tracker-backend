@@ -1,4 +1,4 @@
-package com.budgettracker.budget_tracker_backend.security;
+package com.budgettracker.budget_tracker_backend.authentication;
 
 import com.budgettracker.budget_tracker_backend.model.User;
 import com.budgettracker.budget_tracker_backend.repository.UserRepository;
