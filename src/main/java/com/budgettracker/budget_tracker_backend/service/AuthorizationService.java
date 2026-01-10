@@ -4,6 +4,7 @@ import com.budgettracker.budget_tracker_backend.model.User;
 import com.budgettracker.budget_tracker_backend.model.auth.Role;
 import com.budgettracker.budget_tracker_backend.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
  * Translates database relationships (User → roleIds → Role → capabilityNames)
  * into Spring Security GrantedAuthority objects for authorization checks.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthorizationService {
@@ -35,11 +37,20 @@ public class AuthorizationService {
      */
     public Set<GrantedAuthority> deriveAuthorities(User user) {
         if (user.getRoleIds() == null || user.getRoleIds().isEmpty()) {
+            log.warn("User {} has no roles assigned", user.getId());
             return Collections.emptySet();
         }
 
         List<Role> userRoles = roleRepository.findAllById(user.getRoleIds());
+
+        if (userRoles.isEmpty()) {
+            log.warn("No roles found for user's role IDs: {}. User ID: {}",
+                    user.getRoleIds(), user.getId());
+            return Collections.emptySet();
+        }
+
         Set<GrantedAuthority> authorities = new HashSet<>();
+        int totalCapabilities = 0;
 
         for (Role role : userRoles) {
             authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getName()));
@@ -50,6 +61,9 @@ public class AuthorizationService {
                 }
             }
         }
+        log.debug("Derived authorities for user {}: {} roles, {} capabilities, {} total authorities",
+                user.getId(), userRoles.size(), totalCapabilities, authorities.size());
+
         return authorities;
     }
 
@@ -60,10 +74,18 @@ public class AuthorizationService {
      * @return set of role names (e.g., "USER", "ADMIN")
      */
     public Set<String> getRoleNames(User user) {
-        return roleRepository.findAllById(user.getRoleIds())
+        if (user.getRoleIds() == null || user.getRoleIds().isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        Set<String> roleNames = roleRepository.findAllById(user.getRoleIds())
                 .stream()
                 .map(Role::getName)
                 .collect(Collectors.toSet());
+
+        log.trace("Retrieved {} roles for user {}", roleNames.size(), user.getId());
+
+        return roleNames;
     }
 
     /**
@@ -79,12 +101,23 @@ public class AuthorizationService {
         }
 
         Set<String> allCapabilities = new HashSet<>();
-        roleRepository.findAllById(user.getRoleIds())
-                .forEach(role -> {
-                    if (role.getCapabilityNames() != null) {
-                        allCapabilities.addAll(role.getCapabilityNames());
-                    }
-                });
+        List<Role> userRoles = roleRepository.findAllById(user.getRoleIds());
+
+        if (userRoles.isEmpty()) {
+            log.warn("No roles found for user {} with IDs: {}",
+                    user.getId(), user.getRoleIds());
+            return Collections.emptySet();
+        }
+
+        userRoles.forEach(role -> {
+            if (role.getCapabilityNames() != null) {
+                allCapabilities.addAll(role.getCapabilityNames());
+            }
+        });
+
+        log.debug("Retrieved {} capabilities for user {} from {} roles",
+                allCapabilities.size(), user.getId(), userRoles.size());
+
         return allCapabilities;
     }
 
@@ -96,7 +129,10 @@ public class AuthorizationService {
      * @return true if the user has the specified role
      */
     public boolean hasRole(User user, String roleName) {
-        return getRoleNames(user).contains(roleName);
+        boolean hasRole = getRoleNames(user).contains(roleName);
+        log.trace("User {} {} role '{}'",
+                user.getId(), hasRole ? "has" : "does not have", roleName);
+        return hasRole;
     }
 
     /**
@@ -107,7 +143,10 @@ public class AuthorizationService {
      * @return true if the user has the specified capability
      */
     public boolean hasCapability(User user, String capabilityName) {
-            return getCapabilityNames(user).contains(capabilityName);
+        boolean hasCapability = getCapabilityNames(user).contains(capabilityName);
+        log.trace("User {} {} capability '{}'",
+                user.getId(), hasCapability ? "has" : "does not have", capabilityName);
+        return hasCapability;
     }
 
     /**
@@ -118,12 +157,19 @@ public class AuthorizationService {
      * @return true if the user has at least one of the specified roles
      */
     public boolean hasAnyRole(User user, String... roleNames) {
+        if (roleNames.length == 0) {
+            return false;
+        }
+
         Set<String> userRoles = getRoleNames(user);
         for (String roleName : roleNames) {
             if (userRoles.contains(roleName)) {
+                log.trace("User {} has role '{}'", user.getId(), roleName);
                 return true;
             }
         }
+
+        log.trace("User {} has none of the specified roles", user.getId());
         return false;
     }
 
@@ -135,12 +181,19 @@ public class AuthorizationService {
      * @return true if the user has at least one of the specified capabilities
      */
     public boolean hasAnyCapabilities(User user, String... capabilityNames) {
+        if (capabilityNames.length == 0) {
+            return false;
+        }
+
         Set<String> userCapabilities = getCapabilityNames(user);
         for (String capabilityName : capabilityNames) {
             if (userCapabilities.contains(capabilityName)) {
+                log.trace("User {} has capability '{}'", user.getId(), capabilityName);
                 return true;
             }
         }
+
+        log.trace("User {} has none of the specified capabilities", user.getId());
         return false;
     }
 }
