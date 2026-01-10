@@ -4,6 +4,7 @@ import com.budgettracker.budget_tracker_backend.model.User;
 import com.budgettracker.budget_tracker_backend.repository.UserRepository;
 import com.budgettracker.budget_tracker_backend.service.AuthorizationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -17,6 +18,7 @@ import java.util.Set;
  * Loads user details from the database and computes authorities using AuthorizationService.
  * This service bridges Spring Security authentication with the application's MongoDB data model.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService {
@@ -35,13 +37,15 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
 
-        // TODO: Create UserService and use AppObjectNotFoundException instead
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User" + username + " not found."));
+                .orElseThrow(() -> {
+                    log.warn("Authentication failed - user not found: {}", username);
+                    return new UsernameNotFoundException("Invalid credentials");
+                });
 
-        // TODO: Use AppObjectNotAuthorizedException from UserService
         if (!user.isEnabled()) {
-            throw new UsernameNotFoundException("User account is disabled.");
+            log.warn("Authentication failed - disabled account: {}", username);
+            throw new UsernameNotFoundException("Account disabled");
         }
 
         Set<GrantedAuthority> authorities = authorizationService.deriveAuthorities(user);
