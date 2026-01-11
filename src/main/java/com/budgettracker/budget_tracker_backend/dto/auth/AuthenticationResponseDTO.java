@@ -1,5 +1,6 @@
 package com.budgettracker.budget_tracker_backend.dto.auth;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.Builder;
 
 /**
@@ -7,4 +8,12 @@ import lombok.Builder;
  * Contains user information and security token upon successful login.
  */
 @Builder
-public record AuthenticationResponseDTO(String firstname, String lastname, String token) {}
+public record AuthenticationResponseDTO(
+        @NotBlank(message = "Username is required")
+        String firstname,
+
+        @NotBlank(message = "Username is required")
+        String lastname,
+
+        String token
+) {}
