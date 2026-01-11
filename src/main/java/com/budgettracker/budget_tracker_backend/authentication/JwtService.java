@@ -5,6 +5,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import java.util.function.Function;
  * Service responsible for JWT (JSON Web Token) operations.
  * Handles token generation, validation, and claim extraction.
  */
+@Slf4j
 @Service
 public class JwtService {
 
@@ -35,9 +37,12 @@ public class JwtService {
      * @return A signed JWT token as a String
      */
     public String generateToken(String username, String role) {
+        log.debug("Generating JWT token for user: {} with role: {}", username, role);
+
         var claims = new HashMap<String, Object>();
         claims.put("role", role);
-        return Jwts
+
+        String token = Jwts
                 .builder()
                 .setIssuer("self") // todo
                 .setClaims(claims)
@@ -46,6 +51,10 @@ public class JwtService {
                 .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
                 .signWith(getSignInKey(), SignatureAlgorithm.HS256)
                 .compact();
+
+        log.info("JWT token generated successfully for user: {}, token length: {} chars",
+                username, token.length());
+        return token;
     }
 
     /**
@@ -56,8 +65,24 @@ public class JwtService {
      * @return true if token is valid, false otherwise
      */
     public boolean isTokenValid(String token, UserDetails userDetails) {
-        final String subject = extractSubject(token);
-        return (subject.equals(userDetails.getUsername())) && !isTokenExpired(token);
+        log.debug("Validating JWT token for user: {}", userDetails.getUsername());
+
+        try {
+            final String subject = extractSubject(token);
+            boolean isValid = (subject.equals(userDetails.getUsername())) && !isTokenExpired(token);
+
+            if (isValid) {
+                log.debug("Token validation successful for user: {}", userDetails.getUsername());
+            } else {
+                log.warn("Token validation failed for user: {}", userDetails.getUsername());
+            }
+
+            return isValid;
+        } catch (Exception e) {
+            log.warn("Token validation error for user: {} - {}",
+                    userDetails.getUsername(), e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -68,7 +93,13 @@ public class JwtService {
      * @return The claim value as String
      */
     public String getStringClaim(String token, String claim) {
-        return extractAllClaims(token).get(claim, String.class);
+        log.debug("Extracting claim '{}' from token", claim);
+        try {
+            return extractAllClaims(token).get(claim, String.class);
+        } catch (Exception e) {
+            log.warn("Failed to extract claim '{}' from token: {}", claim, e.getMessage());
+            throw e;
+        }
     }
 
     /**
@@ -78,7 +109,13 @@ public class JwtService {
      * @return The username/subject
      */
     public String extractSubject(String token) {
-        return extractClaim(token, Claims::getSubject);
+        log.debug("Extracting subject from token");
+        try {
+            return extractClaim(token, Claims::getSubject);
+        } catch (Exception e) {
+            log.warn("Failed to extract subject from token: {}", e.getMessage());
+            throw e;
+        }
     }
 
     /**
@@ -90,8 +127,14 @@ public class JwtService {
      * @return The extracted claim value
      */
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
-        final Claims claims = extractAllClaims(token);
-        return claimsResolver.apply(claims);
+        log.debug("Extracting claim from token");
+        try {
+            final Claims claims = extractAllClaims(token);
+            return claimsResolver.apply(claims);
+        } catch (Exception e) {
+            log.warn("Failed to extract claim from token: {}", e.getMessage());
+            throw e;
+        }
     }
 
     /**
@@ -101,7 +144,12 @@ public class JwtService {
      * @return true if expired, false if still valid
      */
     private boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
+        try {
+            return extractExpiration(token).before(new Date());
+        } catch (Exception e) {
+            log.warn("Error checking token expiration: {}", e.getMessage());
+            throw e;
+        }
     }
 
     /**
@@ -111,7 +159,13 @@ public class JwtService {
      * @return The expiration Date
      */
     private Date extractExpiration(String token) {
-        return extractClaim(token, Claims::getExpiration);
+        log.debug("Extracting expiration from token");
+        try {
+            return extractClaim(token, Claims::getExpiration);
+        } catch (Exception e) {
+            log.warn("Failed to extract expiration from token: {}", e.getMessage());
+            throw e;
+        }
     }
 
     /**
@@ -121,12 +175,27 @@ public class JwtService {
      * @return Claims object containing all token data
      */
     private Claims extractAllClaims(String token) {
-        return Jwts
-                .parserBuilder()
-                .setSigningKey(getSignInKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
+        log.debug("Extracting all claims from token");
+        try {
+            return Jwts
+                    .parserBuilder()
+                    .setSigningKey(getSignInKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            log.warn("Token has expired: {}", e.getMessage());
+            throw e;
+        } catch (io.jsonwebtoken.MalformedJwtException e) {
+            log.warn("Malformed token: {}", e.getMessage());
+            throw e;
+        } catch (io.jsonwebtoken.security.SecurityException e) {
+            log.warn("Invalid token signature: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.warn("Failed to parse token: {}", e.getMessage());
+            throw e;
+        }
     }
 
     /**
@@ -138,7 +207,13 @@ public class JwtService {
      * @return  a SecretKey which implements Key.
      */
     private Key getSignInKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
-        return Keys.hmacShaKeyFor(keyBytes);
+        log.debug("Creating signing key from secret");
+        try {
+            byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+            return Keys.hmacShaKeyFor(keyBytes);
+        } catch (Exception e) {
+            log.error("Failed to create signing key: {}", e.getMessage());
+            throw e;
+        }
     }
 }
