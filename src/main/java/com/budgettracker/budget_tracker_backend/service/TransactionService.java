@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
 
 /**
@@ -348,6 +349,11 @@ public class TransactionService implements ITransactionService {
             log.warn("Invalid date range for user '{}': startDate {} is after endDate {}",
                     username, startDate, endDate);
             throw new AppObjectInvalidArgumentException("date range", "startDate must be before endDate");
+        }
+        long yearsBetween = ChronoUnit.YEARS.between(startDate, endDate);
+        if (yearsBetween > 10) {
+            throw new AppObjectInvalidArgumentException("date range",
+                    "Date range cannot exceed 10 years");
         }
 
         User user = userRepository.findByUsername(username)
