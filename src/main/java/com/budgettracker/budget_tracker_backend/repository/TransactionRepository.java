@@ -4,6 +4,7 @@ import com.budgettracker.budget_tracker_backend.model.Transaction;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.List;
  * Provides core queries for filtering transactions by user, category, and date ranges.
  * Supports both paginated (Page) and non-paginated (List) query results.
  */
+@Repository
 public interface TransactionRepository extends MongoRepository<Transaction, String> {
 
     List<Transaction> findByUserId(String userId);
