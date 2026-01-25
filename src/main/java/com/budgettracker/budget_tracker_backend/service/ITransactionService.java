@@ -5,6 +5,7 @@ import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectNotAuth
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectNotFoundException;
 import com.budgettracker.budget_tracker_backend.dto.transaction.TransactionInsertDTO;
 import com.budgettracker.budget_tracker_backend.dto.transaction.TransactionReadOnlyDTO;
+import com.budgettracker.budget_tracker_backend.dto.transaction.TransactionSummaryReadOnlyDTO;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDate;
@@ -55,6 +56,19 @@ public interface ITransactionService {
      */
     void deleteTransaction(String username, String transactionId)
             throws AppObjectNotFoundException, AppObjectNotAuthorizedException;
+
+    /**
+     * Retrieves aggregated transaction summary for a specific user.
+     * Includes total income, total expenses, net balance, recent transactions,
+     * and top spending categories. This method is optimized for dashboard
+     * display and performs calculations on all transactions without pagination.
+     *
+     * @param username the username of the user whose transaction summary to retrieve
+     * @return TransactionSummaryReadOnlyDTO containing aggregated financial data
+     * @throws AppObjectNotFoundException if the user does not exist
+     */
+    TransactionSummaryReadOnlyDTO getTransactionSummary(String username)
+            throws AppObjectNotFoundException;
 
     /**
      * Retrieves a paginated list of transactions for a specific user.

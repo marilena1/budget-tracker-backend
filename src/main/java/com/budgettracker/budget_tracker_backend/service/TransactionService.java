@@ -5,6 +5,7 @@ import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectNotAuth
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectNotFoundException;
 import com.budgettracker.budget_tracker_backend.dto.transaction.TransactionInsertDTO;
 import com.budgettracker.budget_tracker_backend.dto.transaction.TransactionReadOnlyDTO;
+import com.budgettracker.budget_tracker_backend.dto.transaction.TransactionSummaryReadOnlyDTO;
 import com.budgettracker.budget_tracker_backend.model.Category;
 import com.budgettracker.budget_tracker_backend.model.Transaction;
 import com.budgettracker.budget_tracker_backend.model.User;
@@ -20,8 +21,13 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
+import java.util.*;
+import java.util.stream.Collectors;
 
 
 /**
@@ -248,18 +254,199 @@ public class TransactionService implements ITransactionService {
         log.info("Transaction {} deleted successfully by user '{}'", transactionId, username);
     }
 
-        /**
-         * Retrieves a paginated list of transactions for a specific user.
-         * Results are ordered by date descending (newest first) and then by creation time.
-         * Validates pagination parameters before querying the database.
-         *
-         * @param username the username of the user whose transactions to retrieve
-         * @param page the page number (0-based)
-         * @param size the number of transactions per page (maximum 100)
-         * @return Page of TransactionReadOnlyDTOs for the specified user
-         * @throws AppObjectNotFoundException if the user does not exist
-         * @throws AppObjectInvalidArgumentException if page is negative or size is not between 1 and 100
-         */
+    /**
+     * Retrieves aggregated transaction summary for a specific user.
+     * Includes total income, total expenses, net balance, recent transactions,
+     * and top spending categories. This method performs calculations on all
+     * transactions without pagination for dashboard optimization.
+     * Processes each transaction to accumulate totals, filter by date ranges,
+     * aggregate by category, and calculate derived financial metrics.
+     *
+     * @param username the username of the user whose transaction summary to retrieve
+     * @return TransactionSummaryReadOnlyDTO containing aggregated financial data
+     * @throws AppObjectNotFoundException if the user does not exist
+     */
+    @Override
+    public TransactionSummaryReadOnlyDTO getTransactionSummary(String username)
+            throws AppObjectNotFoundException {
+
+        log.info("Getting transaction summary for user '{}'", username);
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> {
+                    log.warn("User '{}' not found when fetching transaction summary", username);
+                    return new AppObjectNotFoundException("User", username);
+                });
+        String userId = user.getId();
+
+        List<Transaction> allTransactions = transactionRepository.findByUserId(userId);
+
+        if (allTransactions.isEmpty()) {
+            log.debug("No transactions found for user '{}', returning empty summary", username);
+            return TransactionSummaryReadOnlyDTO.builder()
+                    .totalIncome(BigDecimal.ZERO)
+                    .totalExpenses(BigDecimal.ZERO)
+                    .netBalance(BigDecimal.ZERO)
+                    .currentMonthIncome(BigDecimal.ZERO)
+                    .currentMonthExpenses(BigDecimal.ZERO)
+                    .currentMonthBalance(BigDecimal.ZERO)
+                    .currentYearSavings(BigDecimal.ZERO)
+                    .currentYearSavingsRate(BigDecimal.ZERO)
+                    .twelveMonthAverageExpense(BigDecimal.ZERO)
+                    .recentTransactions(List.of())
+                    .topSpendingCategories(Map.of())
+                    .generatedAt(LocalDateTime.now())
+                    .build();
+        }
+
+        LocalDate now = LocalDate.now();
+
+        // Initialize accumulators - KEEP ALL THIS LOGIC INLINE
+        BigDecimal totalIncome = BigDecimal.ZERO;
+        BigDecimal totalExpenses = BigDecimal.ZERO;
+        Map<String, BigDecimal> categoryExpenses = new HashMap<>();
+        BigDecimal currentMonthIncome = BigDecimal.ZERO;
+        BigDecimal currentMonthExpenses = BigDecimal.ZERO;
+        BigDecimal yearlyIncome = BigDecimal.ZERO;
+        BigDecimal yearlyExpenses = BigDecimal.ZERO;
+        Map<YearMonth, BigDecimal> monthlyExpenses = new HashMap<>();
+
+        LocalDate firstDayOfMonth = now.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = now.withDayOfMonth(now.lengthOfMonth());
+        LocalDate firstDayOfYear = LocalDate.of(now.getYear(), 1, 1);
+        LocalDate lastDayOfYear = LocalDate.of(now.getYear(), 12, 31);
+        LocalDate twelveMonthsAgo = now.minusMonths(11).withDayOfMonth(1);
+
+        // Process all transactions
+        for (Transaction transaction : allTransactions) {
+            BigDecimal amount = transaction.getAmount();
+            LocalDate transactionDate = transaction.getDate();
+
+            // Total income/expenses
+            if (amount.compareTo(BigDecimal.ZERO) > 0) {
+                totalIncome = totalIncome.add(amount);
+            } else {
+                BigDecimal expenseAmount = amount.abs();
+                totalExpenses = totalExpenses.add(expenseAmount);
+
+                // Category aggregation
+                String categoryName = transaction.getCategoryName();
+                categoryExpenses.merge(categoryName, expenseAmount, BigDecimal::add);
+            }
+
+            // Current month aggregation
+            if (!transactionDate.isBefore(firstDayOfMonth) &&
+                    !transactionDate.isAfter(lastDayOfMonth)) {
+                if (amount.compareTo(BigDecimal.ZERO) > 0) {
+                    currentMonthIncome = currentMonthIncome.add(amount);
+                } else {
+                    currentMonthExpenses = currentMonthExpenses.add(amount.abs());
+                }
+            }
+
+            // Year-to-date aggregation
+            if (!transactionDate.isBefore(firstDayOfYear) &&
+                    !transactionDate.isAfter(lastDayOfYear)) {
+                if (amount.compareTo(BigDecimal.ZERO) > 0) {
+                    yearlyIncome = yearlyIncome.add(amount);
+                } else {
+                    yearlyExpenses = yearlyExpenses.add(amount.abs());
+                }
+            }
+
+            // 12-month expense aggregation (exclude current month)
+            if (amount.compareTo(BigDecimal.ZERO) < 0) {
+                YearMonth yearMonth = YearMonth.from(transactionDate);
+                if (!yearMonth.isBefore(YearMonth.from(twelveMonthsAgo)) &&
+                        !yearMonth.equals(YearMonth.from(firstDayOfMonth))) {
+                    BigDecimal expense = amount.abs();
+                    monthlyExpenses.merge(yearMonth, expense, BigDecimal::add);
+                }
+            }
+        }
+
+        // Calculate derived values
+        BigDecimal netBalance = totalIncome.subtract(totalExpenses);
+        BigDecimal currentMonthBalance = currentMonthIncome.subtract(currentMonthExpenses);
+        BigDecimal currentYearSavings = yearlyIncome.subtract(yearlyExpenses);
+
+        BigDecimal currentYearSavingsRate = BigDecimal.ZERO;
+        if (yearlyIncome.compareTo(BigDecimal.ZERO) > 0) {
+            currentYearSavingsRate = currentYearSavings
+                    .divide(yearlyIncome, 4, RoundingMode.HALF_UP)
+                    .multiply(new BigDecimal("100"));
+        }
+
+        BigDecimal twelveMonthAverageExpense = BigDecimal.ZERO;
+        if (!monthlyExpenses.isEmpty()) {
+            BigDecimal totalMonthlyExpenses = monthlyExpenses.values().stream()
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            twelveMonthAverageExpense = totalMonthlyExpenses.divide(
+                    new BigDecimal(monthlyExpenses.size()), 2, RoundingMode.HALF_UP);
+        }
+
+        // Get top 3 spending categories
+        Map<String, BigDecimal> topSpendingCategories = categoryExpenses.entrySet().stream()
+                .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
+                .limit(3)
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        Map.Entry::getValue,
+                        (e1, e2) -> e1,
+                        LinkedHashMap::new
+                ));
+
+        // Get recent transactions (5 most recent)
+        List<TransactionReadOnlyDTO> recentTransactions = allTransactions.stream()
+                .sorted(Comparator.comparing(Transaction::getDate).reversed()
+                        .thenComparing(Transaction::getCreatedAt).reversed())
+                .limit(5)
+                .map(transaction -> TransactionReadOnlyDTO.builder()
+                        .id(transaction.getId())
+                        .userId(transaction.getUserId())
+                        .userUsername(transaction.getUserUsername())
+                        .categoryId(transaction.getCategoryId())
+                        .categoryName(transaction.getCategoryName())
+                        .categoryColor(transaction.getCategoryColor())
+                        .amount(transaction.getAmount())
+                        .description(transaction.getDescription())
+                        .date(transaction.getDate())
+                        .createdAt(transaction.getCreatedAt())
+                        .updatedAt(transaction.getUpdatedAt())
+                        .build())
+                .collect(Collectors.toList());
+
+        log.info("Transaction summary generated for user '{}': Income={}, Expenses={}, Balance={}",
+                username, totalIncome, totalExpenses, netBalance);
+
+        return TransactionSummaryReadOnlyDTO.builder()
+                .totalIncome(totalIncome)
+                .totalExpenses(totalExpenses)
+                .netBalance(netBalance)
+                .currentMonthIncome(currentMonthIncome)
+                .currentMonthExpenses(currentMonthExpenses)
+                .currentMonthBalance(currentMonthBalance)
+                .currentYearSavings(currentYearSavings)
+                .currentYearSavingsRate(currentYearSavingsRate)
+                .twelveMonthAverageExpense(twelveMonthAverageExpense)
+                .recentTransactions(recentTransactions)
+                .topSpendingCategories(topSpendingCategories)
+                .generatedAt(LocalDateTime.now())
+                .build();
+    }
+
+    /**
+     * Retrieves a paginated list of transactions for a specific user.
+     * Results are ordered by date descending (newest first) and then by creation time.
+     * Validates pagination parameters before querying the database.
+     *
+     * @param username the username of the user whose transactions to retrieve
+     * @param page the page number (0-based)
+     * @param size the number of transactions per page (maximum 100)
+     * @return Page of TransactionReadOnlyDTOs for the specified user
+     * @throws AppObjectNotFoundException if the user does not exist
+     * @throws AppObjectInvalidArgumentException if page is negative or size is not between 1 and 100
+     */
     @Override
     public Page<TransactionReadOnlyDTO> getTransactionsByUser(String username, int page, int size)
             throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
