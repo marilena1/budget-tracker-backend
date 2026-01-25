@@ -396,10 +396,16 @@ public class TransactionService implements ITransactionService {
                         LinkedHashMap::new
                 ));
 
+        log.debug("Total transactions found: {}", allTransactions.size());
+        log.debug("Transactions with null dates: {}",
+                allTransactions.stream().filter(t -> t.getDate() == null).count());
+        log.debug("Transactions with null createdAt: {}",
+                allTransactions.stream().filter(t -> t.getCreatedAt() == null).count());
+
         // Get recent transactions (5 most recent)
         List<TransactionReadOnlyDTO> recentTransactions = allTransactions.stream()
-                .sorted(Comparator.comparing(Transaction::getDate).reversed()
-                        .thenComparing(Transaction::getCreatedAt).reversed())
+                .filter(t -> t.getDate() != null)
+                .sorted(Comparator.comparing(Transaction::getDate).reversed())
                 .limit(5)
                 .map(transaction -> TransactionReadOnlyDTO.builder()
                         .id(transaction.getId())
