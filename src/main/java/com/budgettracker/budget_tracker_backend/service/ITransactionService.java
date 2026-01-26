@@ -116,4 +116,32 @@ public interface ITransactionService {
      */
     Page<TransactionReadOnlyDTO> getTransactionsByUserAndCategory(String username, String categoryId, int page, int size)
             throws AppObjectNotFoundException, AppObjectInvalidArgumentException;
+
+    /**
+     * Retrieves transactions for a user with multiple optional filters.
+     * Supports filtering by category, transaction type (income/expense), and date range.
+     * All filters are optional - omitted filters are not applied.
+     * Type filtering: "income" for positive amounts, "expense" for negative amounts.
+     *
+     * @param username the username of the user whose transactions to retrieve
+     * @param categoryId optional category ID to filter by (null for all categories)
+     * @param type optional transaction type to filter by ("income", "expense", or null for both)
+     * @param startDate optional start date of the range (inclusive)
+     * @param endDate optional end date of the range (inclusive)
+     * @param page the page number (0-based)
+     * @param size the number of transactions per page, must be between 1 and 100
+     * @return Page of TransactionReadOnlyDTOs filtered by the specified criteria
+     * @throws AppObjectNotFoundException if the user or specified category does not exist
+     * @throws AppObjectInvalidArgumentException if pagination parameters are invalid,
+     *         startDate is after endDate, or type is not "income" or "expense"
+     */
+    Page<TransactionReadOnlyDTO> getTransactionsByUserWithFilters(
+            String username,
+            String categoryId,
+            String type,
+            LocalDate startDate,
+            LocalDate endDate,
+            int page,
+            int size
+    ) throws AppObjectNotFoundException, AppObjectInvalidArgumentException;
 }

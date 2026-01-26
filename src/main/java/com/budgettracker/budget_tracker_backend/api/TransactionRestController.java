@@ -346,4 +346,58 @@ public class TransactionRestController {
 
         return ResponseEntity.ok(transactions);
     }
+
+    /**
+     * Retrieves transactions for a user with multiple optional filters.
+     * Supports filtering by category, transaction type (income/expense), date range,
+     * and pagination. All filters are optional - omitted filters are not applied.
+     * Type filtering: "income" for positive amounts, "expense" for negative amounts.
+     *
+     * @param username the username of the user whose transactions to retrieve
+     * @param categoryId optional category ID to filter by (null for all categories)
+     * @param type optional transaction type to filter by ("income", "expense", or null for both)
+     * @param startDate optional start date of the range (inclusive), format: yyyy-MM-dd
+     * @param endDate optional end date of the range (inclusive), format: yyyy-MM-dd
+     * @param page the page number (0-based)
+     * @param size the number of transactions per page
+     * @return ResponseEntity containing a Page of TransactionReadOnlyDTOs filtered by the specified criteria
+     * @throws AppObjectNotFoundException if the user or specified category does not exist
+     * @throws AppObjectInvalidArgumentException if pagination parameters are invalid,
+     *         startDate is after endDate, or type is not "income" or "expense"
+     */
+    @Operation(
+            summary = "Get transactions with multiple filters",
+            description = "Retrieves paginated transactions for a user with optional filters " +
+                    "by category, type (income/expense), and date range. Type is determined by amount: " +
+                    "positive for income, negative for expense. All filters are optional."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Transactions retrieved successfully"),
+            @ApiResponse(responseCode = "404", description = "User or category not found"),
+            @ApiResponse(responseCode = "400", description = "Invalid filter or pagination parameters")
+    })
+    @GetMapping("/user/{username}/filter")
+    public ResponseEntity<Page<TransactionReadOnlyDTO>> getTransactionsByUserWithFilters(
+            @PathVariable @NotBlank(message = "Username is required") String username,
+            @RequestParam(required = false) String categoryId,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be zero or positive") int page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "Size must be at least 1")
+            @Max(value = 100, message = "Size cannot exceed 100") int size)
+            throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
+
+        log.info("GET TRANSACTIONS WITH FILTERS - User: {}, Category: {}, Type: {}, Start: {}, End: {}, Page: {}, Size: {}",
+                username, categoryId, type, startDate, endDate, page, size);
+
+        Page<TransactionReadOnlyDTO> transactions =
+                transactionService.getTransactionsByUserWithFilters(
+                        username, categoryId, type, startDate, endDate, page, size);
+
+        log.info("Filtered transactions retrieved - User: {}, Count: {}, Filters: Category={}, Type={}, DateRange={} to {}",
+                username, transactions.getNumberOfElements(), categoryId, type, startDate, endDate);
+
+        return ResponseEntity.ok(transactions);
+    }
 }

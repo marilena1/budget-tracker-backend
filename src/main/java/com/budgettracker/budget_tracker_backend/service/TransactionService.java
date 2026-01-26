@@ -18,6 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -631,6 +632,138 @@ public class TransactionService implements ITransactionService {
 
         log.debug("Returning {} transactions for user '{}' in category {}",
                 transactionsPage.getNumberOfElements(), username, category.getName());
+
+        return transactionsPage.map(transaction -> TransactionReadOnlyDTO.builder()
+                .id(transaction.getId())
+                .userId(transaction.getUserId())
+                .userUsername(transaction.getUserUsername())
+                .categoryId(transaction.getCategoryId())
+                .categoryName(transaction.getCategoryName())
+                .categoryColor(transaction.getCategoryColor())
+                .amount(transaction.getAmount())
+                .description(transaction.getDescription())
+                .date(transaction.getDate())
+                .createdAt(transaction.getCreatedAt())
+                .updatedAt(transaction.getUpdatedAt())
+                .build());
+    }
+
+    /**
+     * Retrieves transactions for a user with multiple optional filters.
+     * Supports filtering by category, transaction type (income/expense), and date range.
+     * All filters are optional - omitted filters are not applied.
+     * Type filtering: "income" for positive amounts, "expense" for negative amounts.
+     *
+     * @param username the username of the user whose transactions to retrieve
+     * @param categoryId optional category ID to filter by (null for all categories)
+     * @param type optional transaction type to filter by ("income", "expense", or null for both)
+     * @param startDate optional start date of the range (inclusive)
+     * @param endDate optional end date of the range (inclusive)
+     * @param page the page number (0-based)
+     * @param size the number of transactions per page, must be between 1 and 100
+     * @return Page of TransactionReadOnlyDTOs filtered by the specified criteria
+     * @throws AppObjectNotFoundException if the user or specified category does not exist
+     * @throws AppObjectInvalidArgumentException if pagination parameters are invalid,
+     *         startDate is after endDate, or type is not "income" or "expense"
+     */
+    @Override
+    public Page<TransactionReadOnlyDTO> getTransactionsByUserWithFilters(
+            String username,
+            String categoryId,
+            String type,
+            LocalDate startDate,
+            LocalDate endDate,
+            int page,
+            int size
+    ) throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
+
+        log.info("Getting filtered transactions for user '{}' with filters: category={}, type={}, dateRange={} to {}, page={}, size={}",
+                username, categoryId, type, startDate, endDate, page, size);
+
+        if (page < 0) {
+            log.warn("Invalid page number {} for user '{}' filtered query", page, username);
+            throw new AppObjectInvalidArgumentException("page", "must be zero or positive");
+        }
+        if (size <= 0 || size > 100) {
+            log.warn("Invalid page size {} for user '{}' filtered query", size, username);
+            throw new AppObjectInvalidArgumentException("size", "must be between 1 and 100");
+        }
+
+        if (type != null && !type.isEmpty() && !type.equals("income") && !type.equals("expense")) {
+            log.warn("Invalid transaction type '{}' for user '{}' filtered query", type, username);
+            throw new AppObjectInvalidArgumentException("type", "must be 'income', 'expense', or null");
+        }
+
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            log.warn("Invalid date range for user '{}': startDate {} is after endDate {}",
+                    username, startDate, endDate);
+            throw new AppObjectInvalidArgumentException("date range", "startDate must be before endDate");
+        }
+        if (startDate != null && endDate != null) {
+            long yearsBetween = ChronoUnit.YEARS.between(startDate, endDate);
+            if (yearsBetween > 10) {
+                throw new AppObjectInvalidArgumentException("date range",
+                        "Date range cannot exceed 10 years");
+            }
+        }
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> {
+                    log.warn("User '{}' not found when fetching filtered transactions", username);
+                    return new AppObjectNotFoundException("User", username);
+                });
+        String userId = user.getId();
+
+        if (categoryId != null && !categoryId.isEmpty()) {
+            categoryRepository.findById(categoryId)
+                    .orElseThrow(() -> {
+                        log.warn("Category {} not found for user '{}' filtered transactions",
+                                categoryId, username);
+                        return new AppObjectNotFoundException("Category", categoryId);
+                    });
+        }
+
+        List<Transaction> allTransactions = transactionRepository.findByUserId(userId);
+
+        if (allTransactions.isEmpty()) {
+            log.debug("No transactions found for user '{}'", username);
+            return Page.empty();
+        }
+
+        List<Transaction> filteredTransactions = allTransactions.stream()
+                .filter(transaction -> categoryId == null || categoryId.isEmpty() ||
+                        transaction.getCategoryId().equals(categoryId))
+                .filter(transaction -> type == null || type.isEmpty() ||
+                        ("income".equals(type) && transaction.getAmount().compareTo(BigDecimal.ZERO) > 0) ||
+                        ("expense".equals(type) && transaction.getAmount().compareTo(BigDecimal.ZERO) < 0))
+                .filter(transaction -> startDate == null ||
+                        !transaction.getDate().isBefore(startDate))
+                .filter(transaction -> endDate == null ||
+                        !transaction.getDate().isAfter(endDate))
+                .collect(Collectors.toList());
+
+        List<Transaction> sortedTransactions = filteredTransactions.stream()
+                .sorted(Comparator.comparing(Transaction::getDate,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Transaction::getCreatedAt,
+                                Comparator.nullsLast(Comparator.reverseOrder())))
+                .collect(Collectors.toList());
+
+        int totalItems = sortedTransactions.size();
+        int startIndex = Math.min(page * size, totalItems);
+        int endIndex = Math.min(startIndex + size, totalItems);
+
+        List<Transaction> pageContent = sortedTransactions.subList(startIndex, endIndex);
+
+        Page<Transaction> transactionsPage = new PageImpl<>(
+                pageContent,
+                PageRequest.of(page, size, Sort.by("date").descending()
+                        .and(Sort.by("createdAt").descending())),
+                totalItems
+        );
+
+        log.info("Filtered transactions retrieved for user '{}': {} of {} transactions",
+                username, filteredTransactions.size(), allTransactions.size());
 
         return transactionsPage.map(transaction -> TransactionReadOnlyDTO.builder()
                 .id(transaction.getId())
