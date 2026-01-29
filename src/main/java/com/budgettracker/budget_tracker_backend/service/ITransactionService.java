@@ -30,6 +30,21 @@ public interface ITransactionService {
         throws AppObjectInvalidArgumentException, AppObjectNotFoundException;
 
     /**
+     * Retrieves a single transaction by its unique identifier.
+     * Validates that the transaction exists and that the requesting user owns it.
+     * Returns detailed transaction information including category and user associations.
+     * This method is essential for editing or viewing individual transaction details.
+     *
+     * @param transactionId the unique identifier of the transaction to retrieve
+     * @param username the username of the user requesting the transaction
+     * @return TransactionReadOnlyDTO containing the detailed transaction data
+     * @throws AppObjectNotFoundException if the transaction with given ID does not exist
+     * @throws AppObjectNotAuthorizedException if the user does not own the transaction
+     */
+    TransactionReadOnlyDTO getTransactionById(String transactionId, String username)
+            throws AppObjectNotFoundException, AppObjectNotAuthorizedException;
+
+    /**
      * Updates an existing transaction with new data.
      * Validates that the transaction exists, the user owns it, and the new data is valid.
      *

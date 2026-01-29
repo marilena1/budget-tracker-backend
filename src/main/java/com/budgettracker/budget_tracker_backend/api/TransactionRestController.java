@@ -103,6 +103,47 @@ public class TransactionRestController {
     }
 
     /**
+     * Retrieves a single transaction by its unique identifier.
+     * Validates that the transaction exists and that the requesting user owns it.
+     * Returns detailed transaction information including category and user associations.
+     * This endpoint is useful for editing or viewing individual transaction details.
+     *
+     * @param transactionId the unique identifier of the transaction to retrieve
+     * @param username the username of the user requesting the transaction
+     * @return ResponseEntity containing the TransactionReadOnlyDTO with HTTP 200 status
+     * @throws AppObjectNotFoundException if the transaction with given ID does not exist
+     * @throws AppObjectNotAuthorizedException if the user does not own the transaction
+     */
+    @Operation(
+            summary = "Get a single transaction by ID",
+            description = "Retrieves detailed information for a specific transaction after " +
+                    "validating user ownership and transaction existence."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Transaction retrieved successfully",
+                    content = @Content(schema = @Schema(implementation = TransactionReadOnlyDTO.class))),
+            @ApiResponse(responseCode = "404", description = "Transaction not found"),
+            @ApiResponse(responseCode = "403", description = "User not authorized to access this transaction"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized access")
+    })
+    @GetMapping("/{transactionId}")
+    public ResponseEntity<TransactionReadOnlyDTO> getTransactionById(
+            @PathVariable @NotBlank(message = "Transaction ID is required") String transactionId,
+            @RequestParam @NotBlank(message = "Username is required") String username)
+            throws AppObjectNotFoundException, AppObjectNotAuthorizedException {
+
+        log.info("GET TRANSACTION REQUEST - ID: {}, User: {}", transactionId, username);
+
+        TransactionReadOnlyDTO transaction =
+                transactionService.getTransactionById(transactionId, username);
+
+        log.info("Transaction retrieved successfully - ID: {}, User: {}, Amount: {}, Category: {}",
+                transactionId, username, transaction.amount(), transaction.categoryName());
+
+        return ResponseEntity.ok(transaction);
+    }
+
+    /**
      * Updates an existing transaction with new data.
      * Validates that the transaction exists, the user owns it, and the new data is valid.
      *

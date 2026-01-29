@@ -117,6 +117,61 @@ public class TransactionService implements ITransactionService {
     }
 
     /**
+     * Retrieves a single transaction by its unique identifier.
+     * Validates that the transaction exists and that the requesting user owns it.
+     * Returns detailed transaction information including category and user associations.
+     *
+     * @param transactionId the unique identifier of the transaction to retrieve
+     * @param username the username of the user requesting the transaction
+     * @return TransactionReadOnlyDTO containing the detailed transaction data
+     * @throws AppObjectNotFoundException if the transaction with given ID does not exist
+     * @throws AppObjectNotAuthorizedException if the user does not own the transaction
+     */
+    @Override
+    public TransactionReadOnlyDTO getTransactionById(String transactionId, String username)
+            throws AppObjectNotFoundException, AppObjectNotAuthorizedException {
+
+        log.info("Getting transaction {} for user '{}'", transactionId, username);
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> {
+                    log.warn("User '{}' not found when fetching transaction {}", username, transactionId);
+                    return new AppObjectNotFoundException("User", username);
+                });
+        String userId = user.getId();
+
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> {
+                    log.warn("Transaction {} not found for user '{}'", transactionId, username);
+                    return new AppObjectNotFoundException("Transaction", transactionId);
+                });
+
+        if (!transaction.getUserId().equals(userId)) {
+            log.warn("User '{}' attempted to access transaction {} belonging to user '{}'",
+                    username, transactionId, transaction.getUserUsername());
+            throw new AppObjectNotAuthorizedException(
+                    "Transaction " + transactionId,
+                    "You must be the owner of a transaction to view it");
+        }
+
+        log.info("Transaction {} retrieved successfully for user '{}'", transactionId, username);
+
+        return TransactionReadOnlyDTO.builder()
+                .id(transaction.getId())
+                .userId(transaction.getUserId())
+                .userUsername(transaction.getUserUsername())
+                .categoryId(transaction.getCategoryId())
+                .categoryName(transaction.getCategoryName())
+                .categoryColor(transaction.getCategoryColor())
+                .amount(transaction.getAmount())
+                .description(transaction.getDescription())
+                .date(transaction.getDate())
+                .createdAt(transaction.getCreatedAt())
+                .updatedAt(transaction.getUpdatedAt())
+                .build();
+    }
+
+    /**
      * Updates an existing transaction with new data.
      * Validates transaction existence, user ownership, and business rules.
      *
