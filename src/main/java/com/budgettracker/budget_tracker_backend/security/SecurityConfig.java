@@ -64,12 +64,10 @@ public class SecurityConfig {
                 })
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints (no authentication required)
                         .requestMatchers(HttpMethod.POST, "/api/auth/authenticate").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
-                        // TODO after controllers are finalized
-
-                        // Swagger/OpenAPI documentation
+//                        .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/users/register").permitAll()
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers(
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
@@ -78,13 +76,18 @@ public class SecurityConfig {
                                 "/swagger-resources/**",
                                 "/configuration/**"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/users/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/users/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/users/**").authenticated()
+                        .requestMatchers("/api/transactions/**").authenticated()
+                        .requestMatchers("/api/categories/**").authenticated()
+
 
                         // Example role-based protection (adjust based on your needs)
                         // .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // .requestMatchers("/api/budgets/**").hasAnyRole("USER", "ADMIN")
                         // .requestMatchers(HttpMethod.GET, "/api/reports/**").hasAuthority("report:read")
 
-                        // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> {
