@@ -73,9 +73,9 @@ public class AuthenticationService {
      * Uses AuthorizationService to get role names and picks first one.
      */
     private String getPrimaryRoleName(User user) {
-        log.debug("No roles assigned to user '{}', using default 'USER' role", user.getUsername());
         Set<String> roleNames = authorizationService.getRoleNames(user);
         if (roleNames.isEmpty()) {
+            log.debug("No roles assigned to user '{}', using default 'USER' role", user.getUsername());
             return "USER";
         }
         return roleNames.iterator().next();
