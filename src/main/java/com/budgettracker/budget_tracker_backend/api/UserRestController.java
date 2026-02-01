@@ -4,7 +4,6 @@ import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectAlready
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectInvalidArgumentException;
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectNotFoundException;
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectNotAuthorizedException;
-import com.budgettracker.budget_tracker_backend.core.exceptions.ValidationException;
 import com.budgettracker.budget_tracker_backend.dto.user.UserInsertDTO;
 import com.budgettracker.budget_tracker_backend.dto.user.UserReadOnlyDTO;
 import com.budgettracker.budget_tracker_backend.service.IUserService;
@@ -26,7 +25,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.validation.BindingResult;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -73,19 +71,12 @@ public class UserRestController {
     })
     @PostMapping("/register")
     public ResponseEntity<UserReadOnlyDTO> registerUser(
-            @Valid @RequestBody UserInsertDTO userInsertDTO,
-            BindingResult bindingResult)
-            throws AppObjectAlreadyExistsException, AppObjectInvalidArgumentException, ValidationException {
+            @Valid @RequestBody UserInsertDTO userInsertDTO)
+            throws AppObjectAlreadyExistsException, AppObjectInvalidArgumentException {
 
         log.info("USER REGISTRATION REQUEST - Username: {}, Email: {}, Name: {} {}",
                 userInsertDTO.username(), userInsertDTO.email(),
                 userInsertDTO.firstname(), userInsertDTO.lastname());
-
-        if (bindingResult.hasErrors()) {
-            log.warn("User registration failed - Validation errors for username: {}",
-                    userInsertDTO.username());
-            throw new ValidationException(bindingResult);
-        }
 
         UserReadOnlyDTO registeredUser = userService.registerUser(userInsertDTO);
 
@@ -164,18 +155,12 @@ public class UserRestController {
     public ResponseEntity<UserReadOnlyDTO> updateUser(
             @Parameter(description = "Current username of the user to update", required = true, example = "john_doe")
             @PathVariable @NotBlank(message = "Username is required") String username,
-            @Valid @RequestBody UserInsertDTO userUpdateDTO,
-            BindingResult bindingResult)
-            throws AppObjectNotFoundException, AppObjectAlreadyExistsException, AppObjectInvalidArgumentException, AppObjectNotAuthorizedException, ValidationException {
+            @Valid @RequestBody UserInsertDTO userUpdateDTO)
+            throws AppObjectNotFoundException, AppObjectAlreadyExistsException, AppObjectInvalidArgumentException, AppObjectNotAuthorizedException {
 
         ensureCanAccessUser(username);
         log.info("UPDATE USER PROFILE REQUEST - Current Username: {}, New Username: {}, Email: {}",
                 username, userUpdateDTO.username(), userUpdateDTO.email());
-
-        if (bindingResult.hasErrors()) {
-            log.warn("User update failed - Validation errors for current username: {}", username);
-            throw new ValidationException(bindingResult);
-        }
 
         UserReadOnlyDTO updatedUser = userService.updateUser(username, userUpdateDTO);
 

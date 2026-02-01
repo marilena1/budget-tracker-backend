@@ -3,7 +3,6 @@ package com.budgettracker.budget_tracker_backend.api;
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectInvalidArgumentException;
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectNotFoundException;
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectNotAuthorizedException;
-import com.budgettracker.budget_tracker_backend.core.exceptions.ValidationException;
 import com.budgettracker.budget_tracker_backend.dto.transaction.TransactionInsertDTO;
 import com.budgettracker.budget_tracker_backend.dto.transaction.TransactionReadOnlyDTO;
 import com.budgettracker.budget_tracker_backend.dto.transaction.TransactionSummaryReadOnlyDTO;
@@ -25,7 +24,6 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.validation.BindingResult;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -58,7 +56,6 @@ public class TransactionRestController {
      * @param bindingResult contains validation errors for the transactionInsertDTO
      * @return ResponseEntity containing the created TransactionReadOnlyDTO with HTTP 201 status
      *         and location header pointing to the new resource
-     * @throws ValidationException if the transactionInsertDTO fails validation constraints
      * @throws AppObjectInvalidArgumentException if transaction data violates business rules
      * @throws AppObjectNotFoundException if the referenced category or user does not exist
      */
@@ -76,18 +73,12 @@ public class TransactionRestController {
     @PostMapping
     public ResponseEntity<TransactionReadOnlyDTO> createTransaction(
             @Valid @RequestBody TransactionInsertDTO transactionInsertDTO,
-            @RequestParam @NotBlank(message = "Username is required") String username,
-            BindingResult bindingResult)
-            throws AppObjectInvalidArgumentException, AppObjectNotFoundException, AppObjectNotAuthorizedException, ValidationException {
+            @RequestParam @NotBlank(message = "Username is required") String username)
+            throws AppObjectInvalidArgumentException, AppObjectNotFoundException, AppObjectNotAuthorizedException {
 
         ensureCanAccessUser(username);
         log.info("CREATE TRANSACTION REQUEST - User: {}, Category: {}, Amount: {}",
                 username, transactionInsertDTO.categoryId(), transactionInsertDTO.amount());
-
-        if (bindingResult.hasErrors()) {
-            log.warn("Transaction creation failed - Validation errors for user: {}", username);
-            throw new ValidationException(bindingResult);
-        }
 
         TransactionReadOnlyDTO transactionReadOnlyDTO =
                 transactionService.createTransaction(transactionInsertDTO, username);
@@ -156,7 +147,6 @@ public class TransactionRestController {
      * @param username the username of the user attempting the update
      * @param bindingResult contains validation errors for the transactionUpdateDTO
      * @return ResponseEntity containing the updated TransactionReadOnlyDTO
-     * @throws ValidationException if the transactionUpdateDTO fails validation constraints
      * @throws AppObjectNotFoundException if the transaction with given ID does not exist
      * @throws AppObjectNotAuthorizedException if the user does not own the transaction
      * @throws AppObjectInvalidArgumentException if the update data violates business rules
@@ -175,20 +165,13 @@ public class TransactionRestController {
     public ResponseEntity<TransactionReadOnlyDTO> updateTransaction(
             @PathVariable @NotBlank(message = "Transaction ID is required") String transactionId,
             @Valid @RequestBody TransactionInsertDTO transactionUpdateDTO,
-            @RequestParam @NotBlank(message = "Username is required") String username,
-            BindingResult bindingResult)
+            @RequestParam @NotBlank(message = "Username is required") String username)
             throws AppObjectNotFoundException, AppObjectNotAuthorizedException,
-            AppObjectInvalidArgumentException, ValidationException {
+            AppObjectInvalidArgumentException {
 
         ensureCanAccessUser(username);
         log.info("UPDATE TRANSACTION REQUEST - ID: {}, User: {}, New Amount: {}",
                 transactionId, username, transactionUpdateDTO.amount());
-
-        if (bindingResult.hasErrors()) {
-            log.warn("Transaction update failed - Validation errors for ID: {}, User: {}",
-                    transactionId, username);
-            throw new ValidationException(bindingResult);
-        }
 
         TransactionReadOnlyDTO updatedTransaction =
                 transactionService.updateTransaction(transactionId, transactionUpdateDTO, username);

@@ -3,7 +3,6 @@ package com.budgettracker.budget_tracker_backend.api;
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectAlreadyExistsException;
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectInvalidArgumentException;
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectNotFoundException;
-import com.budgettracker.budget_tracker_backend.core.exceptions.ValidationException;
 import com.budgettracker.budget_tracker_backend.dto.category.CategoryInsertDTO;
 import com.budgettracker.budget_tracker_backend.dto.category.CategoryReadOnlyDTO;
 import com.budgettracker.budget_tracker_backend.service.ICategoryService;
@@ -22,7 +21,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.BindingResult;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -56,7 +54,6 @@ public class CategoryRestController {
      * @return ResponseEntity containing the created CategoryReadOnlyDTO with HTTP 201 status
      *         and location header pointing to the new resource
      * @throws AppObjectAlreadyExistsException if a category with the same name already exists
-     * @throws ValidationException if the categoryInsertDTO fails validation constraints
      */
     @Operation(
             summary = "Create a new category",
@@ -70,19 +67,12 @@ public class CategoryRestController {
     })
     @PostMapping
     public ResponseEntity<CategoryReadOnlyDTO> createCategory(
-            @Valid @RequestBody CategoryInsertDTO categoryInsertDTO,
-            BindingResult bindingResult)
-            throws AppObjectAlreadyExistsException, ValidationException {
+            @Valid @RequestBody CategoryInsertDTO categoryInsertDTO)
+            throws AppObjectAlreadyExistsException {
 
         log.info("CREATE CATEGORY REQUEST - Name: '{}', Description length: {}",
                 categoryInsertDTO.name(),
                 categoryInsertDTO.description() != null ? categoryInsertDTO.description().length() : 0);
-
-        if (bindingResult.hasErrors()) {
-            log.warn("Category creation failed - Validation errors for name: '{}'",
-                    categoryInsertDTO.name());
-            throw new ValidationException(bindingResult);
-        }
 
         CategoryReadOnlyDTO createdCategory = categoryService.createCategory(categoryInsertDTO);
 
@@ -109,7 +99,6 @@ public class CategoryRestController {
      * @return ResponseEntity containing the updated CategoryReadOnlyDTO
      * @throws AppObjectNotFoundException if the category with the given ID does not exist
      * @throws AppObjectAlreadyExistsException if the new category name conflicts with an existing category
-     * @throws ValidationException if the categoryUpdateDTO fails validation constraints
      */
     @Operation(
             summary = "Update a category",
@@ -125,17 +114,11 @@ public class CategoryRestController {
     public ResponseEntity<CategoryReadOnlyDTO> updateCategory(
             @Parameter(description = "ID of the category to update", required = true, example = "cat_123")
             @PathVariable @NotBlank(message = "Category ID is required") String categoryId,
-            @Valid @RequestBody CategoryInsertDTO categoryUpdateDTO,
-            BindingResult bindingResult)
-            throws AppObjectNotFoundException, AppObjectAlreadyExistsException, ValidationException {
+            @Valid @RequestBody CategoryInsertDTO categoryUpdateDTO)
+            throws AppObjectNotFoundException, AppObjectAlreadyExistsException {
 
         log.info("UPDATE CATEGORY REQUEST - ID: {}, New Name: '{}'",
                 categoryId, categoryUpdateDTO.name());
-
-        if (bindingResult.hasErrors()) {
-            log.warn("Category update failed - Validation errors for ID: {}", categoryId);
-            throw new ValidationException(bindingResult);
-        }
 
         CategoryReadOnlyDTO updatedCategory = categoryService.updateCategory(categoryId, categoryUpdateDTO);
 
