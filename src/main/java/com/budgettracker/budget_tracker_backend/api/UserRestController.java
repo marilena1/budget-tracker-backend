@@ -3,6 +3,7 @@ package com.budgettracker.budget_tracker_backend.api;
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectAlreadyExistsException;
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectInvalidArgumentException;
 import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectNotFoundException;
+import com.budgettracker.budget_tracker_backend.core.exceptions.AppObjectNotAuthorizedException;
 import com.budgettracker.budget_tracker_backend.core.exceptions.ValidationException;
 import com.budgettracker.budget_tracker_backend.dto.user.UserInsertDTO;
 import com.budgettracker.budget_tracker_backend.dto.user.UserReadOnlyDTO;
@@ -22,6 +23,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -119,8 +123,9 @@ public class UserRestController {
     public ResponseEntity<UserReadOnlyDTO> getUserByUsername(
             @Parameter(description = "Username of the user to retrieve", required = true, example = "john_doe")
             @PathVariable @NotBlank(message = "Username is required") String username)
-            throws AppObjectNotFoundException {
+            throws AppObjectNotFoundException, AppObjectNotAuthorizedException {
 
+        ensureCanAccessUser(username);
         log.debug("GET USER PROFILE REQUEST - Username: {}", username);
 
         UserReadOnlyDTO userProfile = userService.getUserByUsername(username);
@@ -161,8 +166,9 @@ public class UserRestController {
             @PathVariable @NotBlank(message = "Username is required") String username,
             @Valid @RequestBody UserInsertDTO userUpdateDTO,
             BindingResult bindingResult)
-            throws AppObjectNotFoundException, AppObjectAlreadyExistsException, AppObjectInvalidArgumentException, ValidationException {
+            throws AppObjectNotFoundException, AppObjectAlreadyExistsException, AppObjectInvalidArgumentException, AppObjectNotAuthorizedException, ValidationException {
 
+        ensureCanAccessUser(username);
         log.info("UPDATE USER PROFILE REQUEST - Current Username: {}, New Username: {}, Email: {}",
                 username, userUpdateDTO.username(), userUpdateDTO.email());
 
@@ -201,8 +207,9 @@ public class UserRestController {
     public ResponseEntity<Void> deactivateUser(
             @Parameter(description = "Username of the user to deactivate", required = true, example = "john_doe")
             @PathVariable @NotBlank(message = "Username is required") String username)
-            throws AppObjectNotFoundException {
+            throws AppObjectNotFoundException, AppObjectNotAuthorizedException {
 
+        ensureCanAccessUser(username);
         log.info("DEACTIVATE USER REQUEST - Username: {}", username);
 
         userService.deactivateUser(username);
@@ -234,8 +241,9 @@ public class UserRestController {
     public ResponseEntity<Void> reactivateUser(
             @Parameter(description = "Username of the user to reactivate", required = true, example = "john_doe")
             @PathVariable @NotBlank(message = "Username is required") String username)
-            throws AppObjectNotFoundException {
+            throws AppObjectNotFoundException, AppObjectNotAuthorizedException {
 
+        ensureCanAccessUser(username);
         log.info("REACTIVATE USER REQUEST - Username: {}", username);
 
         userService.reactivateUser(username);
@@ -265,6 +273,7 @@ public class UserRestController {
             @ApiResponse(responseCode = "401", description = "Unauthorized access"),
             @ApiResponse(responseCode = "403", description = "Insufficient permissions")
     })
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<Page<UserReadOnlyDTO>> getPaginatedUsers(
             @Parameter(description = "Page number (0-based)", example = "0")
@@ -282,5 +291,27 @@ public class UserRestController {
                 page, usersPage.getNumberOfElements(), usersPage.getTotalPages());
 
         return ResponseEntity.ok(usersPage);
+    }
+
+    /**
+     * Ensures the authenticated user is allowed to access the given username's profile.
+     * Allows access if the path username equals the current user, or if the current user has ADMIN role.
+     *
+     * @param pathUsername the username from the request path
+     * @throws AppObjectNotAuthorizedException if the current user cannot access this profile
+     */
+    private void ensureCanAccessUser(String pathUsername) throws AppObjectNotAuthorizedException {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new AppObjectNotAuthorizedException("User", "Authentication required");
+        }
+        String currentUsername = auth.getName();
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+        if (pathUsername.equals(currentUsername) || isAdmin) {
+            return;
+        }
+        throw new AppObjectNotAuthorizedException("User " + pathUsername,
+                "You can only access your own profile");
     }
 }

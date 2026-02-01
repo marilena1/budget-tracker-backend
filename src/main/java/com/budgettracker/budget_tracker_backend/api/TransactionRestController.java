@@ -23,6 +23,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -76,8 +78,9 @@ public class TransactionRestController {
             @Valid @RequestBody TransactionInsertDTO transactionInsertDTO,
             @RequestParam @NotBlank(message = "Username is required") String username,
             BindingResult bindingResult)
-            throws AppObjectInvalidArgumentException, AppObjectNotFoundException, ValidationException {
+            throws AppObjectInvalidArgumentException, AppObjectNotFoundException, AppObjectNotAuthorizedException, ValidationException {
 
+        ensureCanAccessUser(username);
         log.info("CREATE TRANSACTION REQUEST - User: {}, Category: {}, Amount: {}",
                 username, transactionInsertDTO.categoryId(), transactionInsertDTO.amount());
 
@@ -132,6 +135,7 @@ public class TransactionRestController {
             @RequestParam @NotBlank(message = "Username is required") String username)
             throws AppObjectNotFoundException, AppObjectNotAuthorizedException {
 
+        ensureCanAccessUser(username);
         log.info("GET TRANSACTION REQUEST - ID: {}, User: {}", transactionId, username);
 
         TransactionReadOnlyDTO transaction =
@@ -176,6 +180,7 @@ public class TransactionRestController {
             throws AppObjectNotFoundException, AppObjectNotAuthorizedException,
             AppObjectInvalidArgumentException, ValidationException {
 
+        ensureCanAccessUser(username);
         log.info("UPDATE TRANSACTION REQUEST - ID: {}, User: {}, New Amount: {}",
                 transactionId, username, transactionUpdateDTO.amount());
 
@@ -218,6 +223,7 @@ public class TransactionRestController {
             @PathVariable @NotBlank(message = "Transaction ID is required") String transactionId)
             throws AppObjectNotFoundException, AppObjectNotAuthorizedException {
 
+        ensureCanAccessUser(username);
         log.info("DELETE TRANSACTION REQUEST - ID: {}, User: {}", transactionId, username);
 
         transactionService.deleteTransaction(username, transactionId);
@@ -250,8 +256,9 @@ public class TransactionRestController {
     @GetMapping("/user/{username}/summary")
     public ResponseEntity<TransactionSummaryReadOnlyDTO> getTransactionSummary(
             @PathVariable @NotBlank(message = "Username is required") String username)
-            throws AppObjectNotFoundException {
+            throws AppObjectNotFoundException, AppObjectNotAuthorizedException {
 
+        ensureCanAccessUser(username);
         log.info("GET TRANSACTION SUMMARY REQUEST - User: {}", username);
 
         TransactionSummaryReadOnlyDTO summary = transactionService.getTransactionSummary(username);
@@ -288,8 +295,9 @@ public class TransactionRestController {
             @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be zero or positive") int page,
             @RequestParam(defaultValue = "20") @Min(value = 1, message = "Size must be at least 1")
             @Max(value = 100, message = "Size cannot exceed 100") int size)
-            throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
+            throws AppObjectNotFoundException, AppObjectInvalidArgumentException, AppObjectNotAuthorizedException {
 
+        ensureCanAccessUser(username);
         log.debug("GET TRANSACTIONS REQUEST - User: {}, Page: {}, Size: {}", username, page, size);
 
         Page<TransactionReadOnlyDTO> transactions =
@@ -332,8 +340,9 @@ public class TransactionRestController {
             @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be zero or positive") int page,
             @RequestParam(defaultValue = "20") @Min(value = 1, message = "Size must be at least 1")
             @Max(value = 100, message = "Size cannot exceed 100") int size)
-    throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
+            throws AppObjectNotFoundException, AppObjectInvalidArgumentException, AppObjectNotAuthorizedException {
 
+        ensureCanAccessUser(username);
         log.info("GET TRANSACTIONS BY DATE RANGE - User: {}, Start: {}, End: {}, Page: {}, Size: {}",
                 username, startDate, endDate, page, size);
 
@@ -374,8 +383,9 @@ public class TransactionRestController {
             @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be zero or positive") int page,
             @RequestParam(defaultValue = "20") @Min(value = 1, message = "Size must be at least 1")
             @Max(value = 100, message = "Size cannot exceed 100") int size)
-            throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
+            throws AppObjectNotFoundException, AppObjectInvalidArgumentException, AppObjectNotAuthorizedException {
 
+        ensureCanAccessUser(username);
         log.info("GET TRANSACTIONS BY CATEGORY - User: {}, Category ID: {}, Page: {}, Size: {}",
                 username, categoryId, page, size);
 
@@ -427,8 +437,9 @@ public class TransactionRestController {
             @RequestParam(defaultValue = "0") @Min(value = 0, message = "Page must be zero or positive") int page,
             @RequestParam(defaultValue = "20") @Min(value = 1, message = "Size must be at least 1")
             @Max(value = 100, message = "Size cannot exceed 100") int size)
-            throws AppObjectNotFoundException, AppObjectInvalidArgumentException {
+            throws AppObjectNotFoundException, AppObjectInvalidArgumentException, AppObjectNotAuthorizedException {
 
+        ensureCanAccessUser(username);
         log.info("GET TRANSACTIONS WITH FILTERS - User: {}, Category: {}, Type: {}, Start: {}, End: {}, Page: {}, Size: {}",
                 username, categoryId, type, startDate, endDate, page, size);
 
@@ -440,5 +451,27 @@ public class TransactionRestController {
                 username, transactions.getNumberOfElements(), categoryId, type, startDate, endDate);
 
         return ResponseEntity.ok(transactions);
+    }
+
+    /**
+     * Ensures the authenticated user is allowed to access the given username's transactions.
+     * Allows access if the path/param username equals the current user, or if the current user has ADMIN role.
+     *
+     * @param pathUsername the username from the request path or query
+     * @throws AppObjectNotAuthorizedException if the current user cannot access this user's transactions
+     */
+    private void ensureCanAccessUser(String pathUsername) throws AppObjectNotAuthorizedException {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new AppObjectNotAuthorizedException("Transactions", "Authentication required");
+        }
+        String currentUsername = auth.getName();
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+        if (pathUsername.equals(currentUsername) || isAdmin) {
+            return;
+        }
+        throw new AppObjectNotAuthorizedException("Transactions for " + pathUsername,
+                "You can only access your own transactions");
     }
 }
