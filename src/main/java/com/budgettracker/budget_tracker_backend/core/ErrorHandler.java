@@ -115,6 +115,10 @@ public class ErrorHandler extends ResponseEntityExceptionHandler {
         log.warn("Validation failed: {}", e.getMessage());
         BindingResult bindingResult = e.getBindingResult();
 
+        if (bindingResult == null) {
+            return new ResponseEntity<>(Map.of("error", "Validation failed"), HttpStatus.BAD_REQUEST);
+        }
+
         Map<String, String> errors = new HashMap<>();
         for (FieldError fieldError : bindingResult.getFieldErrors()) {
             errors.put(fieldError.getField(), fieldError.getDefaultMessage());
