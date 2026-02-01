@@ -58,6 +58,7 @@ public class AuthorizationService {
             if (role.getCapabilityNames() != null) {
                 for (String capabilityName : role.getCapabilityNames()) {
                     authorities.add(new SimpleGrantedAuthority(capabilityName));
+                    totalCapabilities++;
                 }
             }
         }
