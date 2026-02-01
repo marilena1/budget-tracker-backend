@@ -82,7 +82,7 @@ public class TransactionRestController {
                 username, transactionInsertDTO.categoryId(), transactionInsertDTO.amount());
 
         if (bindingResult.hasErrors()) {
-            log.warn(" Transaction creation failed - Validation errors for user: {}", username);
+            log.warn("Transaction creation failed - Validation errors for user: {}", username);
             throw new ValidationException(bindingResult);
         }
 

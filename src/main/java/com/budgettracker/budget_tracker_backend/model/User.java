@@ -68,7 +68,7 @@ public class User extends AbstractEntity implements UserDetails {
     }
 
     @Override
-    public  boolean isAccountNonLocked() {
+    public boolean isAccountNonLocked() {
         return true;
     }
 
