@@ -209,12 +209,12 @@ public class ErrorHandler extends ResponseEntityExceptionHandler {
      * @return The appropriate HTTP status code
      */
     private HttpStatus determineHttpStatus(AppGenericException e) {
-        return switch (e.getClass().getSimpleName()) {
-            case "AppObjectNotFoundException" -> HttpStatus.NOT_FOUND;
-            case "AppObjectInvalidArgumentException" -> HttpStatus.BAD_REQUEST;
-            case "AppObjectAlreadyExistsException" -> HttpStatus.CONFLICT;
-            case "AppObjectNotAuthorizedException" -> HttpStatus.FORBIDDEN;
-            case "AppServerException" -> HttpStatus.INTERNAL_SERVER_ERROR;
+        return switch (e) {
+            case AppObjectNotFoundException x -> HttpStatus.NOT_FOUND;
+            case AppObjectInvalidArgumentException x -> HttpStatus.BAD_REQUEST;
+            case AppObjectAlreadyExistsException x -> HttpStatus.CONFLICT;
+            case AppObjectNotAuthorizedException x -> HttpStatus.FORBIDDEN;
+            case AppServerException x -> HttpStatus.INTERNAL_SERVER_ERROR;
             default -> HttpStatus.BAD_REQUEST; // Default for other AppGenericException subtypes
         };
     }
